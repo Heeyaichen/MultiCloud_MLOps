@@ -36,3 +36,17 @@ kubeconfig
 
 # Test files
 test-video.mp4
+
+# Node.js / Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnp
+.pnp.js
+.cache/
+*.cache
+.next/
+out/
+dist/
+build/
