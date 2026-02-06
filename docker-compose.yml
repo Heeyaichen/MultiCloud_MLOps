@@ -57,6 +57,10 @@ services:
       - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-2024-02-15-preview}
       - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
       - AZURE_OPENAI_DEPLOYMENT_NAME=${AZURE_OPENAI_DEPLOYMENT_NAME:-gpt-4o}
+      # Azure ML Model Endpoints (Optional - leave empty to use CLIP only)
+      - NSFW_MODEL_ENDPOINT=${NSFW_MODEL_ENDPOINT:-}
+      - VIOLENCE_MODEL_ENDPOINT=${VIOLENCE_MODEL_ENDPOINT:-}
+      - MODEL_ENDPOINT_KEY=${MODEL_ENDPOINT_KEY:-}
     networks:
       - guardian-network
 

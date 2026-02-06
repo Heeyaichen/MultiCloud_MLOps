@@ -879,6 +879,114 @@ echo "✅ Human review tested"
 
 ---
 
+## Phase 8.5: Minimal MLOps Integration (Optional, 30 minutes)
+
+### Overview
+This phase wires up the existing MLOps scripts (`mlops/training/` and `mlops/deployment/`) with your application. By default, the system uses CLIP-only detection. After completing this phase, you can optionally use your own trained Azure ML models.
+
+**Note**: This is a minimal implementation for learning purposes. For production CI/CD pipelines, see separate Azure DevOps/Azure ML documentation.
+
+### Step 8.5.1: Setup Azure ML Workspace (One-time)
+```bash
+# Run the setup script
+bash scripts/setup-mlops.sh
+
+# Verify workspace was created
+az ml workspace show \
+  --name guardian-ml-workspace \
+  --resource-group rg-guardian-ai-prod
+```
+
+### Step 8.5.2: Train Models (Optional)
+```bash
+# Set environment variables
+export AZURE_SUBSCRIPTION_ID="your-subscription-id"
+export AZURE_RESOURCE_GROUP="rg-guardian-ai-prod"
+export AZURE_ML_WORKSPACE="guardian-ml-workspace"
+export MLFLOW_TRACKING_URI="azureml://your-workspace"
+
+# Train models
+cd mlops/training
+python train_nsfw_model.py
+python train_nsfw_model.py  # Run again for violence model (or modify script)
+```
+
+### Step 8.5.3: Deploy Models to Azure ML
+```bash
+cd mlops/deployment
+python deploy_model.py
+
+# This will output scoring URIs like:
+# nsfw-detector: https://xxx.azureml.net/score
+# violence-detector: https://xxx.azureml.net/score
+```
+
+### Step 8.5.4: Get Endpoint Information
+```bash
+# Use the helper script to get endpoints
+bash scripts/get-model-endpoints.sh nsfw-detector
+bash scripts/get-model-endpoints.sh violence-detector
+
+# Or manually get endpoints:
+az ml online-endpoint show \
+  --name nsfw-detector-endpoint \
+  --resource-group rg-guardian-ai-prod \
+  --workspace-name guardian-ml-workspace \
+  --query scoring_uri -o tsv
+```
+
+### Step 8.5.5: Update Configuration
+
+**For Local Development (docker-compose.yml):**
+```bash
+# Add to your .env file:
+NSFW_MODEL_ENDPOINT="https://xxx.azureml.net/score"
+VIOLENCE_MODEL_ENDPOINT="https://xxx.azureml.net/score"
+MODEL_ENDPOINT_KEY="your-endpoint-key"
+
+# Restart services
+docker-compose restart deep-vision
+```
+
+**For Kubernetes (ConfigMap):**
+```bash
+# Update ConfigMap
+kubectl edit configmap guardian-config -n production
+
+# Add:
+# NSFW_MODEL_ENDPOINT: "https://xxx.azureml.net/score"
+# VIOLENCE_MODEL_ENDPOINT: "https://xxx.azureml.net/score"
+# MODEL_ENDPOINT_KEY: "your-endpoint-key"
+
+# Restart deep-vision pods
+kubectl rollout restart deployment/deep-vision -n production
+```
+
+### Step 8.5.6: Verify Integration
+```bash
+# Check deep-vision logs to see if it's calling Azure ML endpoints
+kubectl logs -l app=deep-vision -n production --tail=50 | grep "Model endpoint"
+
+# Or for local:
+docker-compose logs deep-vision | grep "Model endpoint"
+```
+
+### How It Works
+- **Without Azure ML endpoints**: Deep-vision uses CLIP-only detection (default, works out of the box)
+- **With Azure ML endpoints**: Deep-vision combines CLIP scores (30%) with custom model scores (70%) for improved accuracy
+- **Fallback**: If endpoints are unavailable, the system gracefully falls back to CLIP-only
+
+### Rollback Models (if needed)
+```bash
+# Rollback to previous model version
+python mlops/deployment/rollback_model.py nsfw-detector
+python mlops/deployment/rollback_model.py violence-detector
+```
+
+**Note**: For automated CI/CD pipelines with Azure DevOps and Azure ML Pipelines, see separate documentation (to be created separately).
+
+---
+
 ## Phase 9: Setup Monitoring (Optional, 30 minutes)
 
 ### Step 9.1: Install Prometheus

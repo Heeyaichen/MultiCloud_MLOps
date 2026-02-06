@@ -1,0 +1,116 @@
+# Azure DevOps Pipeline: ML Model Deployment
+# Trigger: After training pipeline completes or manual
+
+trigger: none  # Manual trigger
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - group: guardian-variables
+  - name: AZURE_SUBSCRIPTION_ID
+    value: 'your-subscription-id'  # Replace with your subscription ID
+  - name: AZURE_RESOURCE_GROUP
+    value: 'rg-guardian-ai-prod'
+  - name: AZURE_ML_WORKSPACE
+    value: 'guardian-ml-workspace'
+
+stages:
+  - stage: DeployModels
+    displayName: 'Deploy Models to Azure ML'
+    jobs:
+      - job: DeployModels
+        displayName: 'Deploy All Models'
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '3.11'
+
+          - script: |
+              python -m pip install --upgrade pip
+              pip install azure-ai-ml azure-identity mlflow azure-cli
+            displayName: 'Install dependencies'
+
+          - task: AzureCLI@2
+            displayName: 'Azure Login'
+            inputs:
+              azureSubscription: 'guardian-azure-connection'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az account set --subscription $(AZURE_SUBSCRIPTION_ID)
+
+          - script: |
+              export AZURE_SUBSCRIPTION_ID="$(AZURE_SUBSCRIPTION_ID)"
+              export AZURE_RESOURCE_GROUP="$(AZURE_RESOURCE_GROUP)"
+              export AZURE_ML_WORKSPACE="$(AZURE_ML_WORKSPACE)"
+              
+              cd mlops/deployment
+              python deploy_model.py
+            displayName: 'Deploy Models'
+            env:
+              AZURE_SUBSCRIPTION_ID: $(AZURE_SUBSCRIPTION_ID)
+              AZURE_RESOURCE_GROUP: $(AZURE_RESOURCE_GROUP)
+              AZURE_ML_WORKSPACE: $(AZURE_ML_WORKSPACE)
+
+          - script: |
+              echo "Getting endpoint information..."
+              bash scripts/get-model-endpoints.sh nsfw-detector
+              bash scripts/get-model-endpoints.sh violence-detector
+            displayName: 'Get Endpoint Information'
+            env:
+              AZURE_RESOURCE_GROUP: $(AZURE_RESOURCE_GROUP)
+              AZURE_ML_WORKSPACE: $(AZURE_ML_WORKSPACE)
+            continueOnError: true
+
+          - task: Kubernetes@1
+            displayName: 'Update ConfigMap with endpoints'
+            inputs:
+              connectionType: 'Kubernetes Service Connection'
+              kubernetesServiceEndpoint: 'guardian-aks-connection'
+              namespace: 'production'
+              command: 'apply'
+              arguments: '-f k8s/configmap.yaml'
+            continueOnError: true
+
+          - script: |
+              # Get endpoint URLs and keys
+              NSFW_ENDPOINT=$(az ml online-endpoint show \
+                --name nsfw-detector-endpoint \
+                --resource-group $(AZURE_RESOURCE_GROUP) \
+                --workspace-name $(AZURE_ML_WORKSPACE) \
+                --query scoring_uri -o tsv 2>/dev/null || echo "")
+              
+              VIOLENCE_ENDPOINT=$(az ml online-endpoint show \
+                --name violence-detector-endpoint \
+                --resource-group $(AZURE_RESOURCE_GROUP) \
+                --workspace-name $(AZURE_ML_WORKSPACE) \
+                --query scoring_uri -o tsv 2>/dev/null || echo "")
+              
+              ENDPOINT_KEY=$(az ml online-endpoint get-credentials \
+                --name nsfw-detector-endpoint \
+                --resource-group $(AZURE_RESOURCE_GROUP) \
+                --workspace-name $(AZURE_ML_WORKSPACE) \
+                --query primaryKey -o tsv 2>/dev/null || echo "")
+              
+              if [ -z "$NSFW_ENDPOINT" ] || [ -z "$VIOLENCE_ENDPOINT" ]; then
+                echo "⚠️ Could not retrieve endpoint information. Update ConfigMap manually."
+                exit 0
+              fi
+              
+              echo "Updating ConfigMap..."
+              kubectl create configmap guardian-config \
+                --from-literal=NSFW_MODEL_ENDPOINT="$NSFW_ENDPOINT" \
+                --from-literal=VIOLENCE_MODEL_ENDPOINT="$VIOLENCE_ENDPOINT" \
+                --from-literal=MODEL_ENDPOINT_KEY="$ENDPOINT_KEY" \
+                --dry-run=client -o yaml | \
+                kubectl apply -f - -n production
+              
+              echo "Restarting deep-vision pods..."
+              kubectl rollout restart deployment/deep-vision -n production
+              
+              echo "✅ ConfigMap updated and pods restarted!"
+            displayName: 'Update Model Endpoints in K8s'
+            env:
+              AZURE_RESOURCE_GROUP: $(AZURE_RESOURCE_GROUP)
+              AZURE_ML_WORKSPACE: $(AZURE_ML_WORKSPACE)

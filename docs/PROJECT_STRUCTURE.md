@@ -68,6 +68,7 @@ MLOps_Project/
 │   ├── setup-azure.sh
 │   ├── setup-aws.sh
 │   ├── update-k8s-config.sh           # Auto-populate K8s ConfigMap with AWS values
+│   ├── update-acr-in-manifests.sh     # Replace ACR_PLACEHOLDER in k8s manifests with $ACR_NAME
 │   ├── setup-aks.sh
 │   ├── setup-mlops.sh
 │   ├── build-services.sh
