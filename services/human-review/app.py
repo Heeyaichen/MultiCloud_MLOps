@@ -98,13 +98,13 @@ async def add_to_queue(item: ReviewItem):
 
 @app.get("/queue")
 async def get_queue():
-    """Get all videos pending human review (simplified - query videos table)"""
+    """Get all videos pending human review (query status=review OR decision=review)"""
     try:
-        # Scan for videos with status="review"
+        # Scan for videos with status="review" OR decision="review" so queue shows all borderline cases
         response = videos_table.scan(
-            FilterExpression="#status = :status",
-            ExpressionAttributeNames={"#status": "status"},
-            ExpressionAttributeValues={":status": "review"}
+            FilterExpression="(#status = :s) OR (#decision = :d)",
+            ExpressionAttributeNames={"#status": "status", "#decision": "decision"},
+            ExpressionAttributeValues={":s": "review", ":d": "review"}
         )
         items = response.get('Items', [])
         

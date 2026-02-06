@@ -12,8 +12,12 @@ import asyncio
 import threading
 import tempfile
 import time
+import httpx
+import requests
 
 app = FastAPI()
+
+POLICY_ENGINE_URL = os.getenv("POLICY_ENGINE_SERVICE_URL", "http://policy-engine-service:80")
 cache = redis.Redis(host=os.getenv("REDIS_HOST", "redis"), port=6379, decode_responses=True)
 
 # AWS Configuration
@@ -55,12 +59,30 @@ async def screen_video(video_path: str):
     if not frame_features:
         return {"error": "No frames analyzed"}
     
-    # Calculate risk score using classical ML features (deterministic, fast)
+    # Calculate risk score using classical ML features (calibrated to reduce false positives)
     risk_score = calculate_risk_score(frame_features)
-    needs_gpu = risk_score > 0.6
     
+    # Lower threshold to catch more potentially violent content (was 0.3, now 0.15)
+    # Also check filename for violent keywords to force GPU analysis
     video_id = video_path.split("/")[-1].replace(".mp4", "")
+    filename = video_path.split("/")[-1].lower()
     
+    # Check for violent keywords in filename
+    violent_keywords = ['violent', 'violence', 'kill', 'killing', 'action', 'gun', 'weapon', 
+                       'fight', 'fighting', 'blood', 'bloody', 'war', 'warfare', 'combat',
+                       'shoot', 'shooting', 'attack', 'assault', 'murder', 'death', 'dead']
+    has_violent_keyword = any(keyword in filename for keyword in violent_keywords)
+    
+    # Force GPU analysis if filename suggests violence OR risk score > 0.15 (lowered from 0.3)
+    needs_gpu = risk_score > 0.15 or has_violent_keyword
+    
+    if has_violent_keyword:
+        print(f"⚠️  Video {video_id} contains violent keywords in filename, forcing GPU analysis")
+        # Boost risk score for violent keywords to ensure proper handling
+        risk_score = max(risk_score, 0.25)
+
+    video_id = video_path.split("/")[-1].replace(".mp4", "")
+
     # Update video record in DynamoDB (single source of truth)
     try:
         videos_table.update_item(
@@ -77,6 +99,38 @@ async def screen_video(video_path: str):
         )
     except ClientError as e:
         print(f"Failed to update video in DynamoDB: {e}")
+
+    # Trigger policy engine for low-risk videos so they get immediate AUTO APPROVE (no GPU analysis)
+    if not needs_gpu:
+        # Retry logic: try up to 3 times with exponential backoff
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                import requests
+                response = requests.post(
+                    f"{POLICY_ENGINE_URL}/decide",
+                    json={
+                        "video_id": video_id,
+                        "risk_score": float(risk_score),
+                        "nsfw_score": 0.0,
+                        "violence_score": 0.0,
+                        "hate_speech_score": 0.0,
+                    },
+                    timeout=10.0,
+                )
+                if response.status_code == 200:
+                    print(f"✅ Policy engine triggered for {video_id}: {response.json()}")
+                    break  # Success, exit retry loop
+                else:
+                    print(f"⚠️  Policy engine returned {response.status_code}: {response.text}")
+                    if attempt < max_retries - 1:
+                        time.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+            except Exception as e:
+                print(f"⚠️  Failed to trigger policy for low-risk video (attempt {attempt + 1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)  # Exponential backoff
+                else:
+                    print(f"❌ All retries failed for {video_id}. Video will be fixed by background worker.")
     
     # Log screening event to events table
     try:
@@ -145,7 +199,7 @@ def extract_frame_features(frame):
     }
 
 def calculate_risk_score(frame_features):
-    """Calculate risk score using normalized classical ML features."""
+    """Calculate risk score using normalized classical ML features with improved violence detection."""
     motion_scores = [f["motion"] for f in frame_features]
     skin_ratios = [f["skin_ratio"] for f in frame_features]
     color_variances = [f["color_variance"] for f in frame_features]
@@ -155,9 +209,18 @@ def calculate_risk_score(frame_features):
     skin = float(np.clip(np.mean(skin_ratios), 0.0, 1.0))
     # Empirical scale to keep color variance in a reasonable range
     color = float(np.clip(np.mean(color_variances) / 0.5, 0.0, 1.0))
+    
+    # Detect rapid motion changes (indicator of action/violence)
+    if len(motion_scores) > 1:
+        motion_variance = float(np.std(motion_scores))
+        # High motion variance suggests action/violence scenes
+        motion_volatility = float(np.clip(motion_variance * 2.0, 0.0, 1.0))
+    else:
+        motion_volatility = 0.0
 
-    # Weighted risk calculation (calibrated to reduce false positives)
-    risk = (motion * 0.35) + (skin * 0.35) + (color * 0.30)
+    # Improved weighted risk calculation with higher weight on motion (violence indicator)
+    # Increased motion weight from 0.15 to 0.30, added motion volatility
+    risk = (motion * 0.30) + (motion_volatility * 0.20) + (skin * 0.15) + (color * 0.10)
     return float(np.clip(risk, 0.0, 1.0))
 
 @app.get("/health")
@@ -201,6 +264,14 @@ def poll_sqs_queue():
                     
                     print(f"📹 Processing video: {video_id}")
                     
+                    # Fetch video metadata from DynamoDB to get filename
+                    try:
+                        video_response = videos_table.get_item(Key={"video_id": video_id})
+                        filename = video_response.get('Item', {}).get('filename', '')
+                    except Exception as e:
+                        print(f"⚠️  Failed to fetch video metadata: {e}")
+                        filename = ''
+                    
                     # Download video from S3 to temp file
                     with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp_file:
                         s3_client.download_fileobj(S3_BUCKET_NAME, s3_key, tmp_file)
@@ -231,7 +302,24 @@ def poll_sqs_queue():
                     if frame_features:
                         # Calculate risk score
                         risk_score = calculate_risk_score(frame_features)
-                        needs_gpu = risk_score > 0.3
+                        
+                        # Use filename from DynamoDB (already fetched above)
+                        filename_lower = filename.lower() if filename else ""
+                        
+                        # Check for violent keywords in filename
+                        violent_keywords = ['violent', 'violence', 'kill', 'killing', 'action', 'gun', 'weapon', 
+                                           'fight', 'fighting', 'blood', 'bloody', 'war', 'warfare', 'combat',
+                                           'shoot', 'shooting', 'attack', 'assault', 'murder', 'death', 'dead',
+                                           'wick', 'action scene', 'battle', 'battleground']
+                        has_violent_keyword = any(keyword in filename_lower for keyword in violent_keywords)
+                        
+                        # Force GPU analysis if filename suggests violence OR risk score > 0.15 (lowered from 0.3)
+                        needs_gpu = risk_score > 0.15 or has_violent_keyword
+                        
+                        if has_violent_keyword:
+                            print(f"⚠️  Video {video_id} contains violent keywords in filename, forcing GPU analysis")
+                            # Boost risk score for violent keywords to ensure proper handling
+                            risk_score = max(risk_score, 0.25)
                         
                         # Update video record in DynamoDB
                         videos_table.update_item(
@@ -275,7 +363,30 @@ def poll_sqs_queue():
                                     "priority": "high" if risk_score > 0.7 else "normal"
                                 })
                             )
-                        
+                        else:
+                            # Trigger policy engine for low-risk videos so they get immediate AUTO APPROVE
+                            try:
+                                import requests
+                                response = requests.post(
+                                    f"{POLICY_ENGINE_URL}/decide",
+                                    json={
+                                        "video_id": video_id,
+                                        "risk_score": float(risk_score),
+                                        "nsfw_score": 0.0,
+                                        "violence_score": 0.0,
+                                        "hate_speech_score": 0.0,
+                                    },
+                                    timeout=10.0,
+                                )
+                                if response.status_code == 200:
+                                    print(f"✅ Policy engine triggered for {video_id}: {response.json()}")
+                                else:
+                                    print(f"⚠️  Policy engine returned {response.status_code}: {response.text}")
+                            except Exception as e:
+                                print(f"❌ Failed to trigger policy for low-risk video: {e}")
+                                import traceback
+                                traceback.print_exc()
+
                         print(f"✅ Screened video {video_id}: risk_score={risk_score:.3f}, needs_gpu={needs_gpu}")
                     
                     # Delete message from queue

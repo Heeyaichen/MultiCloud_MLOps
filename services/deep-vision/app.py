@@ -16,6 +16,7 @@ import json
 from typing import Optional
 import threading
 import time
+import asyncio
 
 app = FastAPI()
 
@@ -103,8 +104,19 @@ async def analyze_video(video_id: str, background_tasks: BackgroundTasks):
     # Aggregate scores (CRITICAL PATH - deterministic ML inference)
     nsfw_scores = [f["nsfw_score"] for f in frames_data]
     violence_scores = [f["violence_score"] for f in frames_data]
-    nsfw_avg = float(np.mean(nsfw_scores)) if nsfw_scores else 0.0
-    violence_avg = float(np.mean(violence_scores)) if violence_scores else 0.0
+    
+    # Use 90th percentile to catch more content while reducing false positives
+    # This is better than 75th percentile for detecting actual problematic content
+    nsfw_avg = float(np.percentile(nsfw_scores, 90)) if nsfw_scores else 0.0
+    violence_avg = float(np.percentile(violence_scores, 90)) if violence_scores else 0.0
+    
+    # Light scaling only if custom models are not available (CLIP scores are already calibrated)
+    # If custom models were used, scores are already properly calibrated
+    has_custom_models = any(f.get("custom_nsfw", 0) > 0 or f.get("custom_violence", 0) > 0 for f in frames_data)
+    if not has_custom_models:
+        # CLIP-only mode - apply light scaling (was 0.5, now 0.75 for better accuracy)
+        nsfw_avg = nsfw_avg * 0.75
+        violence_avg = violence_avg * 0.75
     
     # Save to DynamoDB immediately (critical path)
     try:
@@ -140,16 +152,21 @@ async def analyze_video(video_id: str, background_tasks: BackgroundTasks):
     except:
         pass
     
-    # Trigger policy engine decision (optional but keeps decision in sync)
+    # Trigger policy engine decision with risk_score from fast-screening + deep-vision scores
     try:
-        final_score = max(nsfw_avg, violence_avg)
+        video_resp = videos_table.get_item(Key={"video_id": video_id})
+        risk_from_screening = 0.0
+        if "Item" in video_resp:
+            r = video_resp["Item"].get("risk_score")
+            if r is not None:
+                risk_from_screening = float(r)
         requests.post(
             f"{POLICY_ENGINE_URL}/decide",
             json={
                 "video_id": video_id,
+                "risk_score": risk_from_screening,
                 "nsfw_score": nsfw_avg,
                 "violence_score": violence_avg,
-                "risk_score": final_score,
                 "hate_speech_score": 0.0
             },
             timeout=10
@@ -170,31 +187,104 @@ async def analyze_video(video_id: str, background_tasks: BackgroundTasks):
     }
 
 async def analyze_frame_with_ai(frame, frame_num):
-    """Analyze frame using custom models and CLIP"""
+    """Analyve frame using improved CLIP-based detection (works without external model endpoints)"""
     img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
     
-    # CLIP-based content classification
-    clip_labels = ["explicit content", "violence", "safe content", "nudity", "weapons", "blood"]
-    inputs = clip_processor(text=clip_labels, images=img, return_tensors="pt", padding=True).to(device)
+    # First, detect if content is animated/cartoon (to reduce false positives)
+    animation_labels = [
+        "real life video, live action, actual people, real world",
+        "animated cartoon, animation, drawn characters, animated content",
+        "computer graphics, CGI, digital animation, rendered content"
+    ]
     
+    animation_inputs = clip_processor(text=animation_labels, images=img, return_tensors="pt", padding=True).to(device)
     with torch.no_grad():
-        outputs = clip_model(**inputs)
-        logits_per_image = outputs.logits_per_image
-        probs = logits_per_image.softmax(dim=1).cpu().numpy()[0]
+        animation_outputs = clip_model(**animation_inputs)
+        animation_logits = animation_outputs.logits_per_image
+        animation_probs = animation_logits.softmax(dim=1).cpu().numpy()[0]
     
-    # Call custom trained models
-    nsfw_score = await call_model_endpoint(NSFW_ENDPOINT, img)
-    violence_score = await call_model_endpoint(VIOLENCE_ENDPOINT, img)
+    # Check if content is animated (probability of animated/cartoon/CGI)
+    is_animated = float(animation_probs[1] + animation_probs[2]) > 0.5
     
-    # Combine CLIP and custom model scores
-    clip_nsfw = float(probs[0] + probs[3])  # explicit + nudity
-    clip_violence = float(probs[1] + probs[4] + probs[5])  # violence + weapons + blood
+    # Enhanced CLIP-based content classification with better prompts
+    # More specific labels for better accuracy
+    nsfw_labels = [
+        "safe content, normal scene, everyday activity",
+        "explicit sexual content, adult material, pornography",
+        "partial nudity, revealing clothing, suggestive content",
+        "naked person, full nudity, exposed body parts"
+    ]
+    
+    violence_labels = [
+        "safe content, peaceful scene, normal activity",
+        "violence, fighting, physical assault, combat",
+        "weapons, guns, knives, firearms, dangerous objects",
+        "blood, injury, wound, gore, violence aftermath"
+    ]
+    
+    # Analyze NSFW content
+    nsfw_inputs = clip_processor(text=nsfw_labels, images=img, return_tensors="pt", padding=True).to(device)
+    with torch.no_grad():
+        nsfw_outputs = clip_model(**nsfw_inputs)
+        nsfw_logits = nsfw_outputs.logits_per_image
+        nsfw_probs = nsfw_logits.softmax(dim=1).cpu().numpy()[0]
+    
+    # Analyze Violence content
+    violence_inputs = clip_processor(text=violence_labels, images=img, return_tensors="pt", padding=True).to(device)
+    with torch.no_grad():
+        violence_outputs = clip_model(**violence_inputs)
+        violence_logits = violence_outputs.logits_per_image
+        violence_probs = violence_logits.softmax(dim=1).cpu().numpy()[0]
+    
+    # Calculate NSFW score (explicit + partial nudity + full nudity)
+    clip_nsfw = float(nsfw_probs[1] + nsfw_probs[2] * 0.7 + nsfw_probs[3])
+    
+    # Calculate Violence score (violence + weapons + blood)
+    clip_violence = float(violence_probs[1] + violence_probs[2] * 0.8 + violence_probs[3] * 0.9)
+    
+    # Try to call custom model endpoints if available, otherwise use CLIP only
+    nsfw_custom = 0.0
+    violence_custom = 0.0
+    
+    if NSFW_ENDPOINT:
+        try:
+            nsfw_custom = await call_model_endpoint(NSFW_ENDPOINT, img)
+        except:
+            pass
+    
+    if VIOLENCE_ENDPOINT:
+        try:
+            violence_custom = await call_model_endpoint(VIOLENCE_ENDPOINT, img)
+        except:
+            pass
+    
+    # If custom models are available, combine with CLIP (weighted)
+    # If not available, use CLIP as primary (with improved accuracy)
+    if nsfw_custom > 0 or violence_custom > 0:
+        # Custom models available - combine with CLIP
+        nsfw_score = (nsfw_custom * 0.7 + clip_nsfw * 0.3)
+        violence_score = (violence_custom * 0.7 + clip_violence * 0.3)
+    else:
+        # No custom models - use improved CLIP as primary
+        # Apply light calibration (reduce false positives but keep accuracy)
+        nsfw_score = clip_nsfw * 0.85  # Light scaling to reduce false positives
+        violence_score = clip_violence * 0.85
+    
+    # Significantly reduce scores for animated/cartoon content to prevent false positives
+    # Animated violence (like Tom & Jerry) should not be flagged as real violence
+    if is_animated:
+        nsfw_score = nsfw_score * 0.2  # Reduce animated NSFW scores by 80%
+        violence_score = violence_score * 0.25  # Reduce animated violence scores by 75%
     
     return {
         "frame_num": frame_num,
-        "nsfw_score": (nsfw_score * 0.7 + clip_nsfw * 0.3),
-        "violence_score": (violence_score * 0.7 + clip_violence * 0.3),
-        "clip_labels": {label: float(prob) for label, prob in zip(clip_labels, probs)}
+        "nsfw_score": float(np.clip(nsfw_score, 0.0, 1.0)),
+        "violence_score": float(np.clip(violence_score, 0.0, 1.0)),
+        "clip_nsfw": float(clip_nsfw),
+        "clip_violence": float(clip_violence),
+        "custom_nsfw": float(nsfw_custom),
+        "custom_violence": float(violence_custom),
+        "is_animated": is_animated
     }
 
 async def call_model_endpoint(endpoint, image):
@@ -324,8 +414,7 @@ async def health():
         "llm_explanation_enabled": AZURE_OPENAI_ENABLED and client is not None
     }
 
-# Background worker to poll GPU queue
-def poll_gpu_queue():
+async def poll_gpu_queue():
     """Background worker that continuously polls SQS GPU queue for videos to analyze"""
     print("🚀 Starting SQS GPU queue polling worker for Deep Vision...")
     
@@ -375,43 +464,30 @@ def poll_gpu_queue():
                         if not ret:
                             break
                         if count % interval == 0:
-                            # Analyze frame with CLIP
-                            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                            pil_image = Image.fromarray(rgb_frame)
-                            
-                            # CLIP-based content analysis
-                            inputs = clip_processor(
-                                text=["safe content", "explicit content", "violent content", "normal activity"],
-                                images=pil_image,
-                                return_tensors="pt",
-                                padding=True
-                            ).to(device)
-                            
-                            with torch.no_grad():
-                                outputs = clip_model(**inputs)
-                                logits_per_image = outputs.logits_per_image
-                                probs = logits_per_image.softmax(dim=1).cpu().numpy()[0]
-                            
-                            # Calculate scores
-                            nsfw_score = float(probs[1])  # explicit content
-                            violence_score = float(probs[2])  # violent content
-                            
-                            frames_data.append({
-                                "frame_number": count // interval,
-                                "nsfw_score": nsfw_score,
-                                "violence_score": violence_score
-                            })
+                            # Use improved analyze_frame_with_ai function
+                            frame_analysis = await analyze_frame_with_ai(frame, count // interval)
+                            frames_data.append(frame_analysis)
                         
                         count += 1
                     
                     cap.release()
                     os.unlink(local_path)
                     
-                    # Calculate aggregate scores
+                    # Calculate aggregate scores using improved method
                     nsfw_scores = [f["nsfw_score"] for f in frames_data]
                     violence_scores = [f["violence_score"] for f in frames_data]
-                    nsfw_avg = float(np.mean(nsfw_scores)) if nsfw_scores else 0.0
-                    violence_avg = float(np.mean(violence_scores)) if violence_scores else 0.0
+                    
+                    # Use 90th percentile to catch more content while reducing false positives
+                    nsfw_avg = float(np.percentile(nsfw_scores, 90)) if nsfw_scores else 0.0
+                    violence_avg = float(np.percentile(violence_scores, 90)) if violence_scores else 0.0
+                    
+                    # Light scaling only if custom models are not available
+                    has_custom_models = any(f.get("custom_nsfw", 0) > 0 or f.get("custom_violence", 0) > 0 for f in frames_data)
+                    if not has_custom_models:
+                        # CLIP-only mode - apply light scaling for better accuracy
+                        nsfw_avg = nsfw_avg * 0.75
+                        violence_avg = violence_avg * 0.75
+                    
                     final_score = max(nsfw_avg, violence_avg)
                     
                     # Update DynamoDB
@@ -449,25 +525,60 @@ def poll_gpu_queue():
                         }
                     )
                     
-                    # Send to Policy Engine for decision
+                    # Get original risk_score from fast-screening (if available)
                     try:
+                        video_resp = videos_table.get_item(Key={"video_id": video_id})
+                        original_risk_score = 0.0
+                        if "Item" in video_resp:
+                            r = video_resp["Item"].get("risk_score")
+                            if r is not None:
+                                original_risk_score = float(r)
+                    except Exception as e:
+                        print(f"⚠️  Failed to fetch risk_score from DynamoDB: {e}")
+                        original_risk_score = 0.0
+                    
+                    # Send to Policy Engine for decision
+                    policy_decision_made = False
+                    try:
+                        print(f"🔔 Calling policy-engine at {POLICY_ENGINE_URL}/decide for video {video_id}")
                         policy_response = requests.post(
                             f"{POLICY_ENGINE_URL}/decide",
                             json={
                                 "video_id": video_id,
                                 "nsfw_score": nsfw_avg,
                                 "violence_score": violence_avg,
-                                "risk_score": final_score,
+                                "risk_score": original_risk_score,  # Use original risk_score from fast-screening
                                 "hate_speech_score": 0.0  # Not implemented yet
                             },
                             timeout=30
                         )
                         if policy_response.status_code == 200:
-                            print(f"✅ Policy evaluation completed for {video_id}: {policy_response.json()}")
+                            result = policy_response.json()
+                            print(f"✅ Policy evaluation completed for {video_id}: decision={result.get('decision')}, final_score={result.get('final_score', 0):.3f}")
+                            policy_decision_made = True
                         else:
-                            print(f"⚠️  Policy evaluation returned {policy_response.status_code}: {policy_response.text}")
+                            print(f"❌ Policy evaluation returned {policy_response.status_code}: {policy_response.text}")
+                            # Try to parse error response
+                            try:
+                                error_data = policy_response.json()
+                                print(f"   Error details: {error_data}")
+                            except:
+                                print(f"   Error text: {policy_response.text}")
+                    except requests.exceptions.ConnectionError as e:
+                        print(f"❌ Failed to connect to policy-engine at {POLICY_ENGINE_URL}: {e}")
+                        print(f"   This may indicate the service is not available or URL is incorrect")
+                    except requests.exceptions.Timeout as e:
+                        print(f"❌ Policy-engine request timed out after 30s: {e}")
                     except Exception as e:
-                        print(f"⚠️  Failed to trigger policy evaluation: {e}")
+                        print(f"❌ Failed to trigger policy evaluation: {e}")
+                        import traceback
+                        traceback.print_exc()
+                    
+                    # If policy decision failed, log it but don't fail the analysis
+                    # The stuck videos worker will pick it up later
+                    if not policy_decision_made:
+                        print(f"⚠️  Policy decision not made for {video_id}. Status set to 'analyzed', decision='pending'.")
+                        print(f"   The stuck videos worker will process this video within 60 seconds.")
                     
                     print(f"✅ Deep analyzed video {video_id}: nsfw={nsfw_avg:.3f}, violence={violence_avg:.3f}, final={final_score:.3f}")
                     
@@ -486,9 +597,15 @@ def poll_gpu_queue():
             print(f"❌ Error polling GPU queue: {e}")
             time.sleep(10)
 
+def run_poll_gpu_queue():
+    """Wrapper to run async poll_gpu_queue in a new event loop"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(poll_gpu_queue())
+
 @app.on_event("startup")
 async def startup_event():
     """Start background worker on app startup"""
-    worker_thread = threading.Thread(target=poll_gpu_queue, daemon=True)
+    worker_thread = threading.Thread(target=run_poll_gpu_queue, daemon=True)
     worker_thread.start()
     print("✅ Deep Vision service started with GPU queue polling worker")

@@ -98,7 +98,8 @@ async def stream_video(video_id: str):
             ExpiresIn=3600
         )
 
-        return RedirectResponse(url=url)
+        # Return JSON with URL instead of redirect for better frontend compatibility
+        return {"url": url}
     except ClientError as e:
         raise HTTPException(500, f"Failed to generate stream URL: {str(e)}")
 
@@ -110,13 +111,22 @@ async def get_dashboard_stats():
         response = videos_table.scan()
         items = response.get('Items', [])
         
-        # Calculate statistics
+        # Calculate statistics (check both status and decision for compatibility)
+        def is_approved(v):
+            return v.get('status') in ('approved', 'approve') or v.get('decision') in ('approved', 'approve')
+        def is_rejected(v):
+            return v.get('status') in ('rejected', 'reject') or v.get('decision') in ('rejected', 'reject')
+        def is_pending_review(v):
+            return v.get('status') == 'review' or v.get('decision') == 'review'
+        def is_processing(v):
+            return v.get('status') in ('uploaded', 'screened', 'analyzed', 'processing', 'gpu_queued')
+
         stats = {
             "total": len(items),
-            "approved": len([v for v in items if v.get('status') == 'approved']),
-            "rejected": len([v for v in items if v.get('status') == 'rejected']),
-            "pending_review": len([v for v in items if v.get('status') == 'review']),
-            "processing": len([v for v in items if v.get('status') in ['uploaded', 'screened', 'analyzed', 'processing']]),
+            "approved": len([v for v in items if is_approved(v)]),
+            "rejected": len([v for v in items if is_rejected(v)]),
+            "pending_review": len([v for v in items if is_pending_review(v)]),
+            "processing": len([v for v in items if is_processing(v)]),
         }
         
         return stats
@@ -141,6 +151,56 @@ async def get_video_events(video_id: str):
         return items_json
     except ClientError as e:
         raise HTTPException(500, f"Failed to fetch events: {str(e)}")
+
+@app.delete("/videos/{video_id}")
+async def delete_video(video_id: str):
+    """Delete a video from S3 and DynamoDB"""
+    try:
+        # First, get the video to retrieve S3 key
+        response = videos_table.get_item(Key={"video_id": video_id})
+        
+        if 'Item' not in response:
+            raise HTTPException(404, "Video not found")
+        
+        item = response['Item']
+        s3_key = item.get("s3_key") or f"videos/{video_id}.mp4"
+        
+        # Delete from S3
+        try:
+            s3_client.delete_object(Bucket=S3_BUCKET, Key=s3_key)
+        except ClientError as e:
+            # Log error but continue with DynamoDB deletion
+            print(f"Warning: Failed to delete S3 object {s3_key}: {e}")
+        
+        # Delete from DynamoDB videos table
+        videos_table.delete_item(Key={"video_id": video_id})
+        
+        # Optionally delete related events (cleanup)
+        try:
+            # Scan for all events related to this video
+            events_response = events_table.scan(
+                FilterExpression="video_id = :vid",
+                ExpressionAttributeValues={":vid": video_id}
+            )
+            
+            # Delete each event
+            for event in events_response.get('Items', []):
+                events_table.delete_item(Key={"event_id": event.get("event_id")})
+        except ClientError as e:
+            # Log error but don't fail the request
+            print(f"Warning: Failed to delete events for video {video_id}: {e}")
+        
+        return {
+            "message": "Video deleted successfully",
+            "video_id": video_id,
+            "s3_key": s3_key
+        }
+    except HTTPException:
+        raise
+    except ClientError as e:
+        raise HTTPException(500, f"Failed to delete video: {str(e)}")
+    except Exception as e:
+        raise HTTPException(500, f"Unexpected error: {str(e)}")
 
 @app.get("/health")
 async def health():

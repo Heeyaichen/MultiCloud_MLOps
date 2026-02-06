@@ -10,6 +10,8 @@ import json
 from decimal import Decimal
 import httpx
 from openai import AzureOpenAI
+import threading
+import time
 
 app = FastAPI()
 
@@ -57,9 +59,14 @@ AUTO_REJECT_THRESHOLD = float(os.getenv("AUTO_REJECT_THRESHOLD", "0.8"))
 
 @app.post("/decide")
 async def make_decision(result: ModerationResult):
+    # Recalculate risk_score as max of content scores (more accurate than fast-screening heuristic)
+    # This ensures risk_score reflects actual content risk, not just motion/color features
+    effective_risk_score = max(result.nsfw_score, result.violence_score, result.risk_score)
+    
+    # Use effective risk_score in final calculation
     final_score = (
-        result.risk_score * 0.3 +
-        result.nsfw_score * 0.4 +
+        effective_risk_score * 0.4 +
+        result.nsfw_score * 0.3 +
         result.violence_score * 0.2 +
         result.hate_speech_score * 0.1
     )
@@ -70,20 +77,25 @@ async def make_decision(result: ModerationResult):
         decision = Decision.REJECT
     else:
         decision = Decision.REVIEW
-    
+
+    # Use display values for status/decision so dashboard and frontend show correctly (approved/rejected/review)
+    status_value = "approved" if decision == Decision.APPROVE else ("rejected" if decision == Decision.REJECT else "review")
+    decision_value = status_value
+
     # Update video record in DynamoDB (single source of truth)
     try:
         videos_table.update_item(
             Key={"video_id": result.video_id},
-            UpdateExpression="SET #status = :status, #decision = :decision, final_score = :final_score, nsfw_score = :nsfw_score, violence_score = :violence_score, decided_at = :decided_at",
+            UpdateExpression="SET #status = :status, #decision = :decision, final_score = :final_score, risk_score = :risk_score, nsfw_score = :nsfw_score, violence_score = :violence_score, decided_at = :decided_at",
             ExpressionAttributeNames={
                 "#status": "status",
                 "#decision": "decision"
             },
             ExpressionAttributeValues={
-                ":status": decision.value,
-                ":decision": decision.value,
+                ":status": status_value,
+                ":decision": decision_value,
                 ":final_score": Decimal(str(final_score)),
+                ":risk_score": Decimal(str(effective_risk_score)),  # Update risk_score to effective value
                 ":nsfw_score": Decimal(str(result.nsfw_score)),
                 ":violence_score": Decimal(str(result.violence_score)),
                 ":decided_at": datetime.utcnow().isoformat()
@@ -100,9 +112,10 @@ async def make_decision(result: ModerationResult):
                 "video_id": result.video_id,
                 "event_type": "decide",
                 "event_data": {
-                    "decision": decision.value,
+                    "decision": decision_value,
                     "final_score": str(final_score),
-                    "risk_score": str(result.risk_score),
+                    "risk_score": str(effective_risk_score),
+                    "original_risk_score": str(result.risk_score),
                     "nsfw_score": str(result.nsfw_score),
                     "violence_score": str(result.violence_score)
                 },
@@ -122,7 +135,7 @@ async def make_decision(result: ModerationResult):
                     f"{NOTIFICATION_SERVICE_URL}/notify",
                     json={
                         "video_id": result.video_id,
-                        "decision": decision.value,
+                        "decision": decision_value,
                         "webhook_url": "https://webhook.site/unique-id"  # TODO: Get from video metadata
                     },
                     timeout=5.0
@@ -132,7 +145,7 @@ async def make_decision(result: ModerationResult):
     
     return {
         "video_id": result.video_id,
-        "decision": decision,
+        "decision": decision_value,
         "final_score": final_score,
         "requires_review": decision == Decision.REVIEW
     }
@@ -226,6 +239,119 @@ async def validate_policy_rule(rule: PolicyRule):
         return {"valid": False, "errors": errors}
     
     return {"valid": True, "rule": rule.dict()}
+
+def fix_stuck_videos_worker():
+    """Background worker that periodically checks for and fixes videos stuck in processing"""
+    import sys
+    print("🔧 Starting stuck videos fixer worker...", flush=True)
+    sys.stdout.flush()
+    
+    while True:
+        try:
+            # Scan for stuck videos:
+            # 1. status='analyzed' but no decision made (should trigger policy decision)
+            # 2. status='screened' with decision='pending' (old stuck state)
+            # 3. status='processing' for more than 1 hour (likely stuck)
+            stuck_videos = []
+            
+            # Get all videos and filter for stuck ones
+            response = videos_table.scan()
+            all_videos = response.get('Items', [])
+            
+            current_time = datetime.utcnow()
+            for video in all_videos:
+                status = video.get('status', '')
+                decision = video.get('decision', '')
+                analyzed_at = video.get('analyzed_at', '')
+                uploaded_at = video.get('uploaded_at', '')
+                
+                # Case 1: Analyzed but no decision
+                if status == 'analyzed' and not decision:
+                    stuck_videos.append(video)
+                # Case 2: Screened with pending decision
+                elif status == 'screened' and decision == 'pending':
+                    stuck_videos.append(video)
+                # Case 3: Processing for more than 1 hour
+                elif status in ['processing', 'uploaded', 'screened']:
+                    try:
+                        if uploaded_at:
+                            upload_time = datetime.fromisoformat(uploaded_at.replace('Z', '+00:00'))
+                            if (current_time - upload_time.replace(tzinfo=None)).total_seconds() > 3600:  # 1 hour
+                                stuck_videos.append(video)
+                    except:
+                        pass
+            
+            if stuck_videos:
+                print(f"🔍 Found {len(stuck_videos)} stuck video(s), fixing them...")
+                
+                for video in stuck_videos:
+                    video_id = video.get('video_id')
+                    status = video.get('status', '')
+                    risk_score = float(video.get('risk_score', 0.0))
+                    nsfw_score = float(video.get('nsfw_score', 0.0))
+                    violence_score = float(video.get('violence_score', 0.0))
+                    
+                    try:
+                        # If video is analyzed but no decision, make decision
+                        if status == 'analyzed' and not video.get('decision'):
+                            # Create ModerationResult and call make_decision internally
+                            result = ModerationResult(
+                                video_id=video_id,
+                                risk_score=risk_score,
+                                nsfw_score=nsfw_score,
+                                violence_score=violence_score,
+                                hate_speech_score=0.0
+                            )
+                            
+                            # Call make_decision synchronously (we're in a thread)
+                            import asyncio
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            decision_result = loop.run_until_complete(make_decision(result))
+                            loop.close()
+                            
+                            print(f"✅ Fixed stuck video {video_id}: decision={decision_result.get('decision')}, final_score={decision_result.get('final_score', 0):.3f}")
+                        # If video is stuck in processing, mark as needing review
+                        elif status in ['processing', 'uploaded', 'screened']:
+                            # Update status to reviewed if scores are available, otherwise keep processing
+                            if nsfw_score > 0 or violence_score > 0:
+                                result = ModerationResult(
+                                    video_id=video_id,
+                                    risk_score=risk_score,
+                                    nsfw_score=nsfw_score,
+                                    violence_score=violence_score,
+                                    hate_speech_score=0.0
+                                )
+                                import asyncio
+                                loop = asyncio.new_event_loop()
+                                asyncio.set_event_loop(loop)
+                                decision_result = loop.run_until_complete(make_decision(result))
+                                loop.close()
+                                print(f"✅ Fixed stuck video {video_id}: decision={decision_result.get('decision')}, final_score={decision_result.get('final_score', 0):.3f}")
+                            else:
+                                print(f"⚠️  Video {video_id} still processing, scores not available yet")
+                    except Exception as e:
+                        print(f"❌ Failed to fix stuck video {video_id}: {e}")
+                        import traceback
+                        traceback.print_exc()
+            
+            # Sleep for 60 seconds before checking again
+            time.sleep(60)
+            
+        except Exception as e:
+            print(f"❌ Error in stuck videos fixer worker: {e}")
+            import traceback
+            traceback.print_exc()
+            time.sleep(60)  # Wait before retrying
+
+@app.on_event("startup")
+async def startup_event():
+    """Start background worker on app startup to fix stuck videos"""
+    import sys
+    worker_thread = threading.Thread(target=fix_stuck_videos_worker, daemon=True)
+    worker_thread.start()
+    print("✅ Policy Engine service started with stuck videos fixer worker", flush=True)
+    sys.stdout.flush()
 
 @app.get("/health")
 async def health():
