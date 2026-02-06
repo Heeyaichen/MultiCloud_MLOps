@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: guardianacr37955.azurecr.io/guardian-ai-frontend:v5
+        image: guardianacr58206.azurecr.io/guardian-ai-frontend:v1
         ports:
         - containerPort: 80
           name: http

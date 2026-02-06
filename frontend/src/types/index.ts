@@ -1,5 +1,5 @@
-// Video status types
-export type VideoStatus = 'uploaded' | 'screened' | 'analyzed' | 'approved' | 'rejected' | 'review' | 'processing';
+// Video status types (includes both display and API values)
+export type VideoStatus = 'uploaded' | 'screened' | 'analyzed' | 'approved' | 'rejected' | 'review' | 'processing' | 'gpu_queued' | 'approve' | 'reject';
 
 // Video interface
 export interface Video {

@@ -12,21 +12,39 @@ const api = axios.create({
   },
 });
 
-// Error handler
+// Extract a user-friendly message from API error response
+const getResponseMessage = (data: unknown): string => {
+  if (typeof data === 'string') return data;
+  if (data && typeof data === 'object') {
+    const obj = data as Record<string, unknown>;
+    if (typeof obj.detail === 'string') return obj.detail;
+    if (typeof obj.message === 'string') return obj.message;
+    if (Array.isArray(obj.detail)) {
+      const first = obj.detail[0];
+      if (first && typeof first === 'object' && typeof (first as { msg?: string }).msg === 'string') return (first as { msg: string }).msg;
+    }
+  }
+  return 'Request failed. Please try again.';
+};
+
+// Error handler - always throws Error with readable message
 const handleError = (error: AxiosError) => {
   if (error.response) {
-    // Server responded with error
+    const message = getResponseMessage(error.response.data);
     console.error('API Error:', error.response.data);
-    throw error.response.data;
-  } else if (error.request) {
-    // Request made but no response
-    console.error('Network Error:', error.message);
-    throw new Error('Network error. Please check your connection.');
-  } else {
-    // Something else happened
-    console.error('Error:', error.message);
-    throw new Error(error.message);
+    throw new Error(message);
   }
+  if (error.request) {
+    const isTimeout = error.code === 'ECONNABORTED';
+    console.error(isTimeout ? 'Request timeout' : 'Network Error:', error.message);
+    throw new Error(
+      isTimeout
+        ? 'Upload took too long. Try a smaller file or check your connection.'
+        : 'Network error. Please check your connection.'
+    );
+  }
+  console.error('Error:', error.message);
+  throw new Error(error.message || 'An unexpected error occurred.');
 };
 
 // Ingestion Service APIs
@@ -41,6 +59,7 @@ export const ingestionApi = {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
+        timeout: 300000, // 5 minutes for large video uploads (up to 500MB)
       });
 
       return response.data;
@@ -88,6 +107,16 @@ export const videoApi = {
   getVideosByStatus: async (status: string): Promise<Video[]> => {
     try {
       const response = await api.get<Video[]>(`/videos?status=${status}`);
+      return response.data;
+    } catch (error) {
+      return handleError(error as AxiosError);
+    }
+  },
+
+  // Delete video
+  deleteVideo: async (videoId: string): Promise<{ message: string; video_id: string }> => {
+    try {
+      const response = await api.delete<{ message: string; video_id: string }>(`/videos/${videoId}`);
       return response.data;
     } catch (error) {
       return handleError(error as AxiosError);

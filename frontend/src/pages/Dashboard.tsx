@@ -97,9 +97,13 @@ const Dashboard: React.FC = () => {
         filtered = filtered.filter((v) => v.status === 'review');
         break;
       case 4: // Processing
-        filtered = filtered.filter((v) =>
-          ['uploaded', 'screened', 'analyzed', 'processing'].includes(v.status)
-        );
+        filtered = filtered.filter((v) => {
+          // Include videos that are actively processing OR have pending decisions
+          const isProcessingStatus = ['uploaded', 'screened', 'analyzed', 'processing', 'gpu_queued'].includes(v.status);
+          const hasPendingDecision = v.decision === 'pending';
+          // Show in Processing if status indicates processing OR decision is pending
+          return isProcessingStatus || hasPendingDecision;
+        });
         break;
       default: // All
         break;

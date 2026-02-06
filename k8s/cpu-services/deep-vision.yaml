@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: deep-vision
-        image: guardianacr37955.azurecr.io/guardian-ai-deep-vision:v4
+        image: guardianacr58206.azurecr.io/guardian-ai-deep-vision:v1
         ports:
         - containerPort: 8002
           name: http

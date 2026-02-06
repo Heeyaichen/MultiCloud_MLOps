@@ -11,6 +11,11 @@ import {
   Divider,
   Chip,
   LinearProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from '@mui/material';
 import {
   ArrowBack,
@@ -18,6 +23,7 @@ import {
   Cancel,
   RateReview,
   CloudDownload,
+  Delete,
   Info,
   Schedule,
   Storage,
@@ -35,6 +41,8 @@ const VideoDetails: React.FC = () => {
   const [video, setVideo] = useState<Video | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const fetchVideo = async () => {
@@ -74,6 +82,30 @@ const VideoDetails: React.FC = () => {
     if (score < 0.3) return 'success';
     if (score < 0.7) return 'warning';
     return 'error';
+  };
+
+  const handleDeleteClick = () => {
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!videoId) return;
+
+    try {
+      setDeleting(true);
+      await videoApi.deleteVideo(videoId);
+      // Navigate back to dashboard after successful deletion
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete video');
+      setDeleteDialogOpen(false);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
   };
 
   if (loading) {
@@ -211,7 +243,7 @@ const VideoDetails: React.FC = () => {
             <Typography variant="h6" gutterBottom>
               Status
             </Typography>
-            <StatusBadge status={video.status} />
+            <StatusBadge status={video.status} decision={video.decision} />
             <Box mt={2}>
               <Typography variant="body2" color="text.secondary">
                 Decision: <strong>{video.decision}</strong>
@@ -278,8 +310,8 @@ const VideoDetails: React.FC = () => {
               />
             </Box>
 
-            {/* NSFW Score */}
-            {video.nsfw_score > 0 && (
+            {/* NSFW Score - Always show if it exists (not null/undefined) */}
+            {(video.nsfw_score !== null && video.nsfw_score !== undefined) && (
               <Box mb={2}>
                 <Box display="flex" justifyContent="space-between" mb={0.5}>
                   <Typography variant="body2">NSFW Score</Typography>
@@ -296,8 +328,8 @@ const VideoDetails: React.FC = () => {
               </Box>
             )}
 
-            {/* Violence Score */}
-            {video.violence_score > 0 && (
+            {/* Violence Score - Always show if it exists (not null/undefined) */}
+            {(video.violence_score !== null && video.violence_score !== undefined) && (
               <Box mb={2}>
                 <Box display="flex" justifyContent="space-between" mb={0.5}>
                   <Typography variant="body2">Violence Score</Typography>
@@ -361,19 +393,46 @@ const VideoDetails: React.FC = () => {
             </Typography>
             <Button
               variant="outlined"
-              startIcon={<CloudDownload />}
+              color="error"
+              startIcon={<Delete />}
               fullWidth
-              sx={{ mb: 1 }}
-              disabled
+              onClick={handleDeleteClick}
+              disabled={deleting}
             >
-              Download Video
+              {deleting ? 'Deleting...' : 'Delete Video'}
             </Button>
-            <Typography variant="caption" color="text.secondary" display="block" textAlign="center">
-              Download functionality coming soon
+            <Typography variant="caption" color="text.secondary" display="block" textAlign="center" sx={{ mt: 1 }}>
+              This will permanently delete the video from storage
             </Typography>
           </Paper>
         </Grid>
       </Grid>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleDeleteCancel}
+        aria-labelledby="delete-dialog-title"
+        aria-describedby="delete-dialog-description"
+      >
+        <DialogTitle id="delete-dialog-title">
+          Delete Video?
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="delete-dialog-description">
+            Are you sure you want to delete "{video?.filename}"? This action cannot be undone.
+            The video will be permanently removed from storage and all associated data will be deleted.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDeleteCancel} color="primary" disabled={deleting}>
+            Cancel
+          </Button>
+          <Button onClick={handleDeleteConfirm} color="error" variant="contained" disabled={deleting}>
+            {deleting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

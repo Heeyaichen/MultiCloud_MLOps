@@ -70,7 +70,7 @@ const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
 
         {/* Status Badge */}
         <Box mb={2}>
-          <StatusBadge status={video.status} />
+          <StatusBadge status={video.status} decision={video.decision} />
         </Box>
 
         {/* Metadata */}
@@ -111,7 +111,7 @@ const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
               />
             </Box>
 
-            {video.nsfw_score > 0 && (
+            {(video.nsfw_score !== null && video.nsfw_score !== undefined) && (
               <Box mb={1}>
                 <Box display="flex" justifyContent="space-between" mb={0.5}>
                   <Typography variant="caption">NSFW Score</Typography>
@@ -128,7 +128,7 @@ const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
               </Box>
             )}
 
-            {video.violence_score > 0 && (
+            {(video.violence_score !== null && video.violence_score !== undefined) && (
               <Box mb={1}>
                 <Box display="flex" justifyContent="space-between" mb={0.5}>
                   <Typography variant="caption">Violence Score</Typography>

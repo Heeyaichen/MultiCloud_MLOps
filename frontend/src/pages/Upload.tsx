@@ -44,12 +44,6 @@ const Upload: React.FC = () => {
     navigate('/dashboard');
   };
 
-  const handleViewDetails = () => {
-    if (jobId) {
-      navigate(`/videos/${jobId}`);
-    }
-  };
-
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
       <Box mb={4}>
@@ -70,14 +64,9 @@ const Upload: React.FC = () => {
             severity="success"
             icon={<CheckCircle />}
             action={
-              <Box display="flex" gap={1}>
-                <Button color="inherit" size="small" onClick={handleViewDashboard}>
-                  View Dashboard
-                </Button>
-                <Button color="inherit" size="small" onClick={handleViewDetails}>
-                  View Details
-                </Button>
-              </Box>
+              <Button color="inherit" size="small" onClick={handleViewDashboard}>
+                View Dashboard
+              </Button>
             }
           >
             <Typography variant="subtitle2" gutterBottom>
@@ -116,7 +105,7 @@ const Upload: React.FC = () => {
               </Button>
             </Box>
             <Typography variant="caption" color="text.secondary" display="block" mt={1}>
-              Use this ID to open the video details page and track processing status
+              Track processing status on the dashboard
             </Typography>
           </Paper>
         </Box>

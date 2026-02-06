@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: screening
-        image: guardianacr37955.azurecr.io/guardian-ai-fast-screening:v4
+        image: guardianacr58206.azurecr.io/guardian-ai-fast-screening:v1
         ports:
         - containerPort: 8001
         resources:
