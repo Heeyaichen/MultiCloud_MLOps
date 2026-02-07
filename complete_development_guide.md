@@ -232,7 +232,7 @@ az acr update --name $ACR_NAME --admin-enabled true
 
 # Get ACR credentials
 export ACR_USERNAME=$(az acr credential show --name $ACR_NAME --query username -o tsv)
-export ACR_PASSWORD=$(az acr credential show --name $ACR_NAME --query passwords[0].value -o tsv)
+export ACR_PASSWORD=$(az acr credential show --name $ACR_NAME --query 'passwords[0].value' -o tsv)
 export ACR_LOGIN_SERVER=$(az acr show --name $ACR_NAME --query loginServer -o tsv)
 
 echo "ACR Login Server: $ACR_LOGIN_SERVER"
@@ -252,11 +252,11 @@ echo "✅ ACR created and logged in"
 ```bash
 # Create AKS cluster (this takes 10-15 minutes)
 # Check if AKS cluster already exists
-if az aks show --resource-group $RESOURCE_GROUP --name $AKS_CLUSTER &>/dev/null; then
+if az aks show --resource-group $RESOURCE_GROUP --name $AKS_CLUSTER >/dev/null 2>&1; then
   echo "AKS cluster already exists, ensuring ACR is attached..."
   
   # Ensure ACR is attached
-  if ! az aks check-acr --name $AKS_CLUSTER --resource-group $RESOURCE_GROUP --acr ${ACR_NAME}.azurecr.io &>/dev/null; then
+  if ! az aks check-acr --name $AKS_CLUSTER --resource-group $RESOURCE_GROUP --acr ${ACR_NAME}.azurecr.io >/dev/null 2>&1; then
     az aks update \
       --resource-group $RESOURCE_GROUP \
       --name $AKS_CLUSTER \
