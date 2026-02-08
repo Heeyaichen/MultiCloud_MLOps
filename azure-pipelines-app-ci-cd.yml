@@ -34,40 +34,114 @@ stages:
               containerRegistry: 'guardian-acr-connection'
 
           - script: |
-              export PATH="/usr/local/bin:$PATH"
-              if [ -z "$$DOCKER_CMD" ]; then
-                if [ -x /usr/local/bin/docker ]; then DOCKER_CMD=/usr/local/bin/docker
-                elif [ -x /usr/bin/docker ]; then DOCKER_CMD=/usr/bin/docker
-                else DOCKER_CMD=docker
-                fi
+              if [ -n "$(DOCKER_CMD)" ]; then
+                echo "##vso[task.setvariable variable=DOCKER_PATH]$(DOCKER_CMD)"
+              elif [ -x /usr/local/bin/docker ]; then
+                echo "##vso[task.setvariable variable=DOCKER_PATH]/usr/local/bin/docker"
+              elif [ -x /usr/bin/docker ]; then
+                echo "##vso[task.setvariable variable=DOCKER_PATH]/usr/bin/docker"
+              else
+                echo "##vso[task.setvariable variable=DOCKER_PATH]docker"
               fi
-              services=("ingestion" "fast-screening" "deep-vision" "policy-engine" "human-review" "notification" "api-gateway")
-              for service in "$${services[@]}"; do
-                echo "Building $$service..."
-                $$DOCKER_CMD buildx create --name guardian-builder --use || $$DOCKER_CMD buildx use guardian-builder
-                $$DOCKER_CMD buildx build \
-                  --platform linux/amd64 \
-                  -t $(ACR_NAME).azurecr.io/guardian-ai-$$service:$(Build.BuildId) \
-                  -t $(ACR_NAME).azurecr.io/guardian-ai-$$service:latest \
-                  --push \
-                  ./services/$$service
-              done
-            displayName: 'Build Application Services'
+            displayName: 'Set Docker path'
             env:
-              ACR_NAME: $(ACR_NAME)
               DOCKER_CMD: $(DOCKER_CMD)
 
           - script: |
-              export PATH="/usr/local/bin:$PATH"
-              if [ -z "$$DOCKER_CMD" ]; then
-                if [ -x /usr/local/bin/docker ]; then DOCKER_CMD=/usr/local/bin/docker
-                elif [ -x /usr/bin/docker ]; then DOCKER_CMD=/usr/bin/docker
-                else DOCKER_CMD=docker
-                fi
-              fi
+              echo "Building ingestion..."
+              $(DOCKER_PATH) buildx create --name guardian-builder --use || $(DOCKER_PATH) buildx use guardian-builder
+              $(DOCKER_PATH) buildx build \
+                --platform linux/amd64 \
+                -t $(ACR_NAME).azurecr.io/guardian-ai-ingestion:$(Build.BuildId) \
+                -t $(ACR_NAME).azurecr.io/guardian-ai-ingestion:latest \
+                --push \
+                ./services/ingestion
+            displayName: 'Build ingestion'
+            env:
+              ACR_NAME: $(ACR_NAME)
+
+          - script: |
+              echo "Building fast-screening..."
+              $(DOCKER_PATH) buildx create --name guardian-builder --use || $(DOCKER_PATH) buildx use guardian-builder
+              $(DOCKER_PATH) buildx build \
+                --platform linux/amd64 \
+                -t $(ACR_NAME).azurecr.io/guardian-ai-fast-screening:$(Build.BuildId) \
+                -t $(ACR_NAME).azurecr.io/guardian-ai-fast-screening:latest \
+                --push \
+                ./services/fast-screening
+            displayName: 'Build fast-screening'
+            env:
+              ACR_NAME: $(ACR_NAME)
+
+          - script: |
+              echo "Building deep-vision..."
+              $(DOCKER_PATH) buildx create --name guardian-builder --use || $(DOCKER_PATH) buildx use guardian-builder
+              $(DOCKER_PATH) buildx build \
+                --platform linux/amd64 \
+                -t $(ACR_NAME).azurecr.io/guardian-ai-deep-vision:$(Build.BuildId) \
+                -t $(ACR_NAME).azurecr.io/guardian-ai-deep-vision:latest \
+                --push \
+                ./services/deep-vision
+            displayName: 'Build deep-vision'
+            env:
+              ACR_NAME: $(ACR_NAME)
+
+          - script: |
+              echo "Building policy-engine..."
+              $(DOCKER_PATH) buildx create --name guardian-builder --use || $(DOCKER_PATH) buildx use guardian-builder
+              $(DOCKER_PATH) buildx build \
+                --platform linux/amd64 \
+                -t $(ACR_NAME).azurecr.io/guardian-ai-policy-engine:$(Build.BuildId) \
+                -t $(ACR_NAME).azurecr.io/guardian-ai-policy-engine:latest \
+                --push \
+                ./services/policy-engine
+            displayName: 'Build policy-engine'
+            env:
+              ACR_NAME: $(ACR_NAME)
+
+          - script: |
+              echo "Building human-review..."
+              $(DOCKER_PATH) buildx create --name guardian-builder --use || $(DOCKER_PATH) buildx use guardian-builder
+              $(DOCKER_PATH) buildx build \
+                --platform linux/amd64 \
+                -t $(ACR_NAME).azurecr.io/guardian-ai-human-review:$(Build.BuildId) \
+                -t $(ACR_NAME).azurecr.io/guardian-ai-human-review:latest \
+                --push \
+                ./services/human-review
+            displayName: 'Build human-review'
+            env:
+              ACR_NAME: $(ACR_NAME)
+
+          - script: |
+              echo "Building notification..."
+              $(DOCKER_PATH) buildx create --name guardian-builder --use || $(DOCKER_PATH) buildx use guardian-builder
+              $(DOCKER_PATH) buildx build \
+                --platform linux/amd64 \
+                -t $(ACR_NAME).azurecr.io/guardian-ai-notification:$(Build.BuildId) \
+                -t $(ACR_NAME).azurecr.io/guardian-ai-notification:latest \
+                --push \
+                ./services/notification
+            displayName: 'Build notification'
+            env:
+              ACR_NAME: $(ACR_NAME)
+
+          - script: |
+              echo "Building api-gateway..."
+              $(DOCKER_PATH) buildx create --name guardian-builder --use || $(DOCKER_PATH) buildx use guardian-builder
+              $(DOCKER_PATH) buildx build \
+                --platform linux/amd64 \
+                -t $(ACR_NAME).azurecr.io/guardian-ai-api-gateway:$(Build.BuildId) \
+                -t $(ACR_NAME).azurecr.io/guardian-ai-api-gateway:latest \
+                --push \
+                ./services/api-gateway
+            displayName: 'Build api-gateway'
+            env:
+              ACR_NAME: $(ACR_NAME)
+
+          - script: |
               echo "Building frontend..."
-              $$DOCKER_CMD buildx create --name guardian-builder --use || $$DOCKER_CMD buildx use guardian-builder
-              $$DOCKER_CMD buildx build \
+              $(DOCKER_PATH) buildx create --name guardian-builder --use || $(DOCKER_PATH) buildx use guardian-builder
+              $(DOCKER_PATH) buildx build \
                 --platform linux/amd64 \
                 -t $(ACR_NAME).azurecr.io/guardian-ai-frontend:$(Build.BuildId) \
                 -t $(ACR_NAME).azurecr.io/guardian-ai-frontend:latest \
@@ -75,7 +149,7 @@ stages:
                 ./frontend
             displayName: 'Build Frontend'
             env:
-              DOCKER_CMD: $(DOCKER_CMD)
+              ACR_NAME: $(ACR_NAME)
 
   - stage: Deploy
     displayName: 'Deploy to AKS'
