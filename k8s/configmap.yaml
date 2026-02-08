@@ -28,13 +28,7 @@ data:
   # Azure OpenAI Configuration (Optional)
   AZURE_OPENAI_ENABLED: "false"
   
-  # Azure ML Model Endpoints (Optional - leave empty to use CLIP only)
-  # Set these after running mlops/deployment/deploy_model.py
-  NSFW_MODEL_ENDPOINT: ""
-  VIOLENCE_MODEL_ENDPOINT: ""
-  MODEL_ENDPOINT_KEY: ""
-  
   # Service URLs (for direct HTTP calls)
   NOTIFICATION_SERVICE_URL: "http://notification:8005"
   HUMAN_REVIEW_SERVICE_URL: "http://human-review:8004"
-  POLICY_ENGINE_SERVICE_URL: "http://policy-engine-service:80"
+  POLICY_ENGINE_SERVICE_URL: "http://policy-engine:8003"

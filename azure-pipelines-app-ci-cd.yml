@@ -15,16 +15,10 @@ trigger:
 pool:
   vmImage: 'ubuntu-latest'
 
+# All env-specific values come from variable group 'guardian-variables' (Pipelines → Library).
+# Create the group and add: ACR_NAME, AKS_CLUSTER, RESOURCE_GROUP, NAMESPACE (each learner uses their own).
 variables:
-  - group: guardian-variables  # Variable group (create in Azure DevOps UI)
-  - name: ACR_NAME
-    value: 'guardianacr58206'
-  - name: AKS_CLUSTER
-    value: 'guardian-ai-aks'
-  - name: RESOURCE_GROUP
-    value: 'rg-guardian-ai-prod'
-  - name: NAMESPACE
-    value: 'production'
+  - group: guardian-variables
 
 stages:
   - stage: Build
@@ -95,7 +89,7 @@ stages:
                       -n $(NAMESPACE) || true
 
                     kubectl set image deployment/fast-screening \
-                      fast-screening=$(ACR_NAME).azurecr.io/guardian-ai-fast-screening:$(Build.BuildId) \
+                      screening=$(ACR_NAME).azurecr.io/guardian-ai-fast-screening:$(Build.BuildId) \
                       -n $(NAMESPACE) || true
 
                     kubectl set image deployment/deep-vision \
@@ -103,7 +97,7 @@ stages:
                       -n $(NAMESPACE) || true
 
                     kubectl set image deployment/policy-engine \
-                      policy-engine=$(ACR_NAME).azurecr.io/guardian-ai-policy-engine:$(Build.BuildId) \
+                      policy=$(ACR_NAME).azurecr.io/guardian-ai-policy-engine:$(Build.BuildId) \
                       -n $(NAMESPACE) || true
 
                     kubectl set image deployment/human-review \
