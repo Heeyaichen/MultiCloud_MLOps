@@ -35,22 +35,22 @@ stages:
 
           - script: |
               export PATH="/usr/local/bin:$PATH"
-              if [ -z "$DOCKER_CMD" ]; then
+              if [ -z "$$DOCKER_CMD" ]; then
                 if [ -x /usr/local/bin/docker ]; then DOCKER_CMD=/usr/local/bin/docker
                 elif [ -x /usr/bin/docker ]; then DOCKER_CMD=/usr/bin/docker
                 else DOCKER_CMD=docker
                 fi
               fi
               services=("ingestion" "fast-screening" "deep-vision" "policy-engine" "human-review" "notification" "api-gateway")
-              for service in "${services[@]}"; do
-                echo "Building $service..."
-                $DOCKER_CMD buildx create --name guardian-builder --use || $DOCKER_CMD buildx use guardian-builder
-                $DOCKER_CMD buildx build \
+              for service in "$${services[@]}"; do
+                echo "Building $$service..."
+                $$DOCKER_CMD buildx create --name guardian-builder --use || $$DOCKER_CMD buildx use guardian-builder
+                $$DOCKER_CMD buildx build \
                   --platform linux/amd64 \
-                  -t $(ACR_NAME).azurecr.io/guardian-ai-$service:$(Build.BuildId) \
-                  -t $(ACR_NAME).azurecr.io/guardian-ai-$service:latest \
+                  -t $(ACR_NAME).azurecr.io/guardian-ai-$$service:$(Build.BuildId) \
+                  -t $(ACR_NAME).azurecr.io/guardian-ai-$$service:latest \
                   --push \
-                  ./services/$service
+                  ./services/$$service
               done
             displayName: 'Build Application Services'
             env:
@@ -59,15 +59,15 @@ stages:
 
           - script: |
               export PATH="/usr/local/bin:$PATH"
-              if [ -z "$DOCKER_CMD" ]; then
+              if [ -z "$$DOCKER_CMD" ]; then
                 if [ -x /usr/local/bin/docker ]; then DOCKER_CMD=/usr/local/bin/docker
                 elif [ -x /usr/bin/docker ]; then DOCKER_CMD=/usr/bin/docker
                 else DOCKER_CMD=docker
                 fi
               fi
               echo "Building frontend..."
-              $DOCKER_CMD buildx create --name guardian-builder --use || $DOCKER_CMD buildx use guardian-builder
-              $DOCKER_CMD buildx build \
+              $$DOCKER_CMD buildx create --name guardian-builder --use || $$DOCKER_CMD buildx use guardian-builder
+              $$DOCKER_CMD buildx build \
                 --platform linux/amd64 \
                 -t $(ACR_NAME).azurecr.io/guardian-ai-frontend:$(Build.BuildId) \
                 -t $(ACR_NAME).azurecr.io/guardian-ai-frontend:latest \
