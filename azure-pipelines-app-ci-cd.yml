@@ -13,7 +13,7 @@ trigger:
       - docker-compose.yml
 
 pool:
-  vmImage: 'ubuntu-latest'
+  name: 'Default'
 
 # All env-specific values come from variable group 'guardian-variables' (Pipelines → Library).
 # Create the group and add: ACR_NAME, AKS_CLUSTER, RESOURCE_GROUP, NAMESPACE (each learner uses their own).
