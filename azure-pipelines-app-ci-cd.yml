@@ -34,6 +34,7 @@ stages:
               containerRegistry: 'guardian-acr-connection'
 
           - script: |
+              export PATH="/usr/local/bin:$PATH"
               services=("ingestion" "fast-screening" "deep-vision" "policy-engine" "human-review" "notification" "api-gateway")
               for service in "${services[@]}"; do
                 echo "Building $service..."
@@ -50,6 +51,7 @@ stages:
               ACR_NAME: $(ACR_NAME)
 
           - script: |
+              export PATH="/usr/local/bin:$PATH"
               echo "Building frontend..."
               docker buildx create --name guardian-builder --use || docker buildx use guardian-builder
               docker buildx build \
