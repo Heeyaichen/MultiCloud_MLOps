@@ -16,7 +16,7 @@ pool:
   name: 'Default'
 
 # All env-specific values come from variable group 'guardian-variables' (Pipelines → Library).
-# Create the group and add: ACR_NAME, AKS_CLUSTER, RESOURCE_GROUP, NAMESPACE (each learner uses their own).
+# Required: ACR_NAME, AKS_CLUSTER, RESOURCE_GROUP, NAMESPACE. Optional: DOCKER_CMD (full path to docker if auto-detect fails).
 variables:
   - group: guardian-variables
 
@@ -35,11 +35,17 @@ stages:
 
           - script: |
               export PATH="/usr/local/bin:$PATH"
+              if [ -z "$DOCKER_CMD" ]; then
+                if [ -x /usr/local/bin/docker ]; then DOCKER_CMD=/usr/local/bin/docker
+                elif [ -x /usr/bin/docker ]; then DOCKER_CMD=/usr/bin/docker
+                else DOCKER_CMD=docker
+                fi
+              fi
               services=("ingestion" "fast-screening" "deep-vision" "policy-engine" "human-review" "notification" "api-gateway")
               for service in "${services[@]}"; do
                 echo "Building $service..."
-                docker buildx create --name guardian-builder --use || docker buildx use guardian-builder
-                docker buildx build \
+                $DOCKER_CMD buildx create --name guardian-builder --use || $DOCKER_CMD buildx use guardian-builder
+                $DOCKER_CMD buildx build \
                   --platform linux/amd64 \
                   -t $(ACR_NAME).azurecr.io/guardian-ai-$service:$(Build.BuildId) \
                   -t $(ACR_NAME).azurecr.io/guardian-ai-$service:latest \
@@ -49,18 +55,27 @@ stages:
             displayName: 'Build Application Services'
             env:
               ACR_NAME: $(ACR_NAME)
+              DOCKER_CMD: $(DOCKER_CMD)
 
           - script: |
               export PATH="/usr/local/bin:$PATH"
+              if [ -z "$DOCKER_CMD" ]; then
+                if [ -x /usr/local/bin/docker ]; then DOCKER_CMD=/usr/local/bin/docker
+                elif [ -x /usr/bin/docker ]; then DOCKER_CMD=/usr/bin/docker
+                else DOCKER_CMD=docker
+                fi
+              fi
               echo "Building frontend..."
-              docker buildx create --name guardian-builder --use || docker buildx use guardian-builder
-              docker buildx build \
+              $DOCKER_CMD buildx create --name guardian-builder --use || $DOCKER_CMD buildx use guardian-builder
+              $DOCKER_CMD buildx build \
                 --platform linux/amd64 \
                 -t $(ACR_NAME).azurecr.io/guardian-ai-frontend:$(Build.BuildId) \
                 -t $(ACR_NAME).azurecr.io/guardian-ai-frontend:latest \
                 --push \
                 ./frontend
             displayName: 'Build Frontend'
+            env:
+              DOCKER_CMD: $(DOCKER_CMD)
 
   - stage: Deploy
     displayName: 'Deploy to AKS'
