@@ -93,25 +93,27 @@ Service connections allow Azure DevOps to access your Azure resources.
 2. Under **Pipelines**, click **"Service connections"**
 3. Click **"Create service connection"**
 4. Select **"Azure Resource Manager"**
-5. Select **"Workload Identity federation (automatic)"** (recommended)
-6. Click **"Next"**
-7. Fill in:
+5. Select **"Identity type - App Registration (automatic)"** (recommended)
+6. Select **"Credential - Workload Identity federation (automatic)"** (recommended)
+7. Click **"Next"**
+8. Fill in:
    - **Subscription**: Select your Azure subscription
    - **Resource group**: `rg-guardian-ai-prod`
    - **Service connection name**: `guardian-azure-connection`
    - **Security**: Grant access permission to all pipelines (or specific pipelines)
-8. Click **"Save"**
+9. Click **"Save"**
 
 #### Step 1.2.2: Create Docker Registry Service Connection (ACR)
 1. In **Service connections**, click **"Create service connection"**
 2. Select **"Docker Registry"**
 3. Select **"Azure Container Registry"**
-4. Fill in:
+4. Select **"Authentication Type - Workload Identity federation"** 
+5. Fill in:
    - **Azure subscription**: Select your subscription
    - **Azure container registry**: `guardianacr58206` (or your ACR name)
    - **Service connection name**: `guardian-acr-connection`
    - **Security**: Grant access permission to all pipelines
-5. Click **"Save"**
+6. Click **"Save"**
 
 #### Step 1.2.3: Create Kubernetes Service Connection
 1. In **Service connections**, click **"Create service connection"**
@@ -122,6 +124,7 @@ Service connections allow Azure DevOps to access your Azure resources.
    - **Resource group**: `rg-guardian-ai-prod`
    - **Kubernetes cluster**: `guardian-ai-aks` (or your cluster name)
    - **Namespace**: `production`
+   - Disable: Use cluster admin credentials
    - **Service connection name**: `guardian-aks-connection`
    - **Security**: Grant access permission to all pipelines
 5. Click **"Save"**
@@ -137,163 +140,22 @@ This pipeline builds Docker images and deploys to AKS.
 2. Navigate to root directory
 3. Click **"New"** → **"File"**
 4. Name: `azure-pipelines-app-ci-cd.yml`
-5. Copy the following content:
-
-```yaml
-# Azure DevOps Pipeline: Application Services CI/CD
-# Trigger: On push to main branch
-
-trigger:
-  branches:
-    include:
-      - main
-  paths:
-    include:
-      - services/*
-      - frontend/*
-      - k8s/*
-      - docker-compose.yml
-
-pool:
-  vmImage: 'ubuntu-latest'
-
-variables:
-  - group: guardian-variables  # Variable group (create in next step)
-  - name: ACR_NAME
-    value: 'guardianacr58206'
-  - name: AKS_CLUSTER
-    value: 'guardian-ai-aks'
-  - name: RESOURCE_GROUP
-    value: 'rg-guardian-ai-prod'
-  - name: NAMESPACE
-    value: 'production'
-
-stages:
-  - stage: Build
-    displayName: 'Build Docker Images'
-    jobs:
-      - job: BuildImages
-        displayName: 'Build and Push Images'
-        steps:
-          - task: Docker@2
-            displayName: 'Login to ACR'
-            inputs:
-              command: login
-              containerRegistry: 'guardian-acr-connection'
-
-          - script: |
-              services=("ingestion" "fast-screening" "deep-vision" "policy-engine" "human-review" "notification" "api-gateway")
-              for service in "${services[@]}"; do
-                echo "Building $service..."
-                docker buildx create --name guardian-builder --use || docker buildx use guardian-builder
-                docker buildx build \
-                  --platform linux/amd64 \
-                  -t $(ACR_NAME).azurecr.io/guardian-ai-$service:$(Build.BuildId) \
-                  -t $(ACR_NAME).azurecr.io/guardian-ai-$service:latest \
-                  --push \
-                  ./services/$service
-              done
-            displayName: 'Build Application Services'
-            env:
-              ACR_NAME: $(ACR_NAME)
-
-          - script: |
-              echo "Building frontend..."
-              docker buildx create --name guardian-builder --use || docker buildx use guardian-builder
-              docker buildx build \
-                --platform linux/amd64 \
-                -t $(ACR_NAME).azurecr.io/guardian-ai-frontend:$(Build.BuildId) \
-                -t $(ACR_NAME).azurecr.io/guardian-ai-frontend:latest \
-                --push \
-                ./frontend
-            displayName: 'Build Frontend'
-
-  - stage: Deploy
-    displayName: 'Deploy to AKS'
-    dependsOn: Build
-    condition: succeeded()
-    jobs:
-      - deployment: DeployToAKS
-        displayName: 'Deploy Services'
-        environment: 'production'
-        strategy:
-          runOnce:
-            deploy:
-              steps:
-                - task: Kubernetes@1
-                  displayName: 'Set kubectl context'
-                  inputs:
-                    connectionType: 'Kubernetes Service Connection'
-                    kubernetesServiceEndpoint: 'guardian-aks-connection'
-                    namespace: '$(NAMESPACE)'
-
-                - script: |
-                    echo "Updating ConfigMap..."
-                    kubectl apply -f k8s/configmap.yaml
-
-                    echo "Deploying services..."
-                    kubectl set image deployment/ingestion \
-                      ingestion=$(ACR_NAME).azurecr.io/guardian-ai-ingestion:$(Build.BuildId) \
-                      -n $(NAMESPACE) || true
-
-                    kubectl set image deployment/fast-screening \
-                      fast-screening=$(ACR_NAME).azurecr.io/guardian-ai-fast-screening:$(Build.BuildId) \
-                      -n $(NAMESPACE) || true
-
-                    kubectl set image deployment/deep-vision \
-                      deep-vision=$(ACR_NAME).azurecr.io/guardian-ai-deep-vision:$(Build.BuildId) \
-                      -n $(NAMESPACE) || true
-
-                    kubectl set image deployment/policy-engine \
-                      policy-engine=$(ACR_NAME).azurecr.io/guardian-ai-policy-engine:$(Build.BuildId) \
-                      -n $(NAMESPACE) || true
-
-                    kubectl set image deployment/human-review \
-                      human-review=$(ACR_NAME).azurecr.io/guardian-ai-human-review:$(Build.BuildId) \
-                      -n $(NAMESPACE) || true
-
-                    kubectl set image deployment/notification \
-                      notification=$(ACR_NAME).azurecr.io/guardian-ai-notification:$(Build.BuildId) \
-                      -n $(NAMESPACE) || true
-
-                    kubectl set image deployment/api-gateway \
-                      api-gateway=$(ACR_NAME).azurecr.io/guardian-ai-api-gateway:$(Build.BuildId) \
-                      -n $(NAMESPACE) || true
-
-                    kubectl set image deployment/guardian-frontend \
-                      frontend=$(ACR_NAME).azurecr.io/guardian-ai-frontend:$(Build.BuildId) \
-                      -n $(NAMESPACE) || true
-
-                    echo "Waiting for rollouts..."
-                    kubectl rollout status deployment/ingestion -n $(NAMESPACE) --timeout=5m || true
-                    kubectl rollout status deployment/fast-screening -n $(NAMESPACE) --timeout=5m || true
-                    kubectl rollout status deployment/deep-vision -n $(NAMESPACE) --timeout=5m || true
-                    kubectl rollout status deployment/policy-engine -n $(NAMESPACE) --timeout=5m || true
-                  displayName: 'Deploy to Kubernetes'
-                  env:
-                    ACR_NAME: $(ACR_NAME)
-                    NAMESPACE: $(NAMESPACE)
-
-                - script: |
-                    echo "Verifying deployments..."
-                    kubectl get pods -n $(NAMESPACE)
-                    kubectl get deployments -n $(NAMESPACE)
-                  displayName: 'Verify Deployment'
-                  env:
-                    NAMESPACE: $(NAMESPACE)
-```
-
 6. Click **"Commit"** to save the file
 
-#### Step 1.3.2: Create Variable Group
+#### Step 1.3.2: Create Variable Group (Required)
+The pipeline uses **only** the variable group for env-specific values; there are no hardcoded ACR or cluster names in the YAML. Each learner must create this group and set their own values so the same pipeline file works for everyone.
+
 1. In your project, go to **Pipelines** → **Library**
 2. Click **"+ Variable group"**
 3. Name: `guardian-variables`
-4. Add variables (optional, can be hardcoded in pipeline):
-   - `ACR_NAME`: `guardianacr58206`
-   - `AKS_CLUSTER`: `guardian-ai-aks`
-   - `RESOURCE_GROUP`: `rg-guardian-ai-prod`
+4. Add the following variables (use **your own** values from your Azure setup):
+   - **`ACR_NAME`**: Your Azure Container Registry name (e.g. the name from `az acr create --name <ACR_NAME> ...`). Example: `guardianacr58206`
+   - **`AKS_CLUSTER`**: Your AKS cluster name. Example: `guardian-ai-aks`
+   - **`RESOURCE_GROUP`**: The resource group containing ACR and AKS. Example: `rg-guardian-ai-prod`
+   - **`NAMESPACE`**: Kubernetes namespace for the app. Example: `production`
 5. Click **"Save"**
+
+If any of these variables are missing, the pipeline will fail when it runs. Do not edit the pipeline YAML to hardcode values—use this variable group so each user can run the project with their own ACR and cluster.
 
 #### Step 1.3.3: Create Pipeline from YAML
 1. Go to **Pipelines** → **Pipelines**
@@ -368,7 +230,7 @@ Compute targets are where your ML training jobs run.
 4. Click **"Create"**
 5. Wait for creation (2-3 minutes)
 
-#### Step 2.2.2: Create GPU Compute Cluster (optional, for faster training)
+<!-- #### Step 2.2.2: Create GPU Compute Cluster (optional, for faster training)
 1. In **Compute** → **Compute clusters**, click **"+ New"**
 2. Fill in:
    - **Compute name**: `gpu-training-cluster`
@@ -378,7 +240,7 @@ Compute targets are where your ML training jobs run.
    - **Maximum nodes**: `1`
    - **Idle seconds before scale down**: `120`
 3. Click **"Create"**
-4. **Note**: GPU clusters are expensive (~$2-3/hour). Use CPU for learning.
+4. **Note**: GPU clusters are expensive (~$2-3/hour). Use CPU for learning. -->
 
 ---
 

@@ -181,10 +181,6 @@ stages:
                       human-review=$(ACR_NAME).azurecr.io/guardian-ai-human-review:$(Build.BuildId) \
                       -n $(NAMESPACE) || true
 
-                    kubectl set image deployment/notification \
-                      notification=$(ACR_NAME).azurecr.io/guardian-ai-notification:$(Build.BuildId) \
-                      -n $(NAMESPACE) || true
-
                     kubectl set image deployment/api-gateway \
                       api-gateway=$(ACR_NAME).azurecr.io/guardian-ai-api-gateway:$(Build.BuildId) \
                       -n $(NAMESPACE) || true
@@ -193,11 +189,27 @@ stages:
                       frontend=$(ACR_NAME).azurecr.io/guardian-ai-frontend:$(Build.BuildId) \
                       -n $(NAMESPACE) || true
 
+                    echo "Checking deployment status before rollouts..."
+                    kubectl get deployments -n $(NAMESPACE)
+                    kubectl get pods -n $(NAMESPACE) -o wide
+                    
                     echo "Waiting for rollouts..."
-                    kubectl rollout status deployment/ingestion -n $(NAMESPACE) --timeout=5m || true
-                    kubectl rollout status deployment/fast-screening -n $(NAMESPACE) --timeout=5m || true
-                    kubectl rollout status deployment/deep-vision -n $(NAMESPACE) --timeout=5m || true
-                    kubectl rollout status deployment/policy-engine -n $(NAMESPACE) --timeout=5m || true
+                    for deployment in ingestion fast-screening deep-vision policy-engine human-review api-gateway guardian-frontend; do
+                      echo "Checking rollout status for $deployment..."
+                      if kubectl rollout status deployment/$deployment -n $(NAMESPACE) --timeout=5m 2>&1; then
+                        echo "✅ $deployment rollout successful"
+                      else
+                        echo "⚠️ $deployment rollout timed out or failed"
+                        echo "Diagnostics for $deployment:"
+                        kubectl describe deployment/$deployment -n $(NAMESPACE) | tail -30 || true
+                        echo ""
+                        echo "Pods for $deployment:"
+                        kubectl get pods -n $(NAMESPACE) -l app=$deployment -o wide || true
+                        echo ""
+                        echo "Recent events for $deployment pods:"
+                        kubectl get events -n $(NAMESPACE) --sort-by='.lastTimestamp' | grep -i "$deployment" | tail -10 || true
+                      fi
+                    done
                   displayName: 'Deploy to Kubernetes'
                   env:
                     ACR_NAME: $(ACR_NAME)
