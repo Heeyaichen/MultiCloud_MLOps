@@ -50,9 +50,9 @@ stages:
             continueOnError: true
 
           - task: Docker@2
-            displayName: 'Build ingestion'
+            displayName: 'Build and Push ingestion'
             inputs:
-              command: build
+              command: buildAndPush
               repository: $(ACR_NAME).azurecr.io/guardian-ai-ingestion
               dockerfile: services/ingestion/Dockerfile
               containerRegistry: 'guardian-acr-connection'
@@ -61,19 +61,9 @@ stages:
                 latest
 
           - task: Docker@2
-            displayName: 'Push ingestion'
+            displayName: 'Build and Push fast-screening'
             inputs:
-              command: push
-              repository: $(ACR_NAME).azurecr.io/guardian-ai-ingestion
-              containerRegistry: 'guardian-acr-connection'
-              tags: |
-                $(Build.BuildId)
-                latest
-
-          - task: Docker@2
-            displayName: 'Build fast-screening'
-            inputs:
-              command: build
+              command: buildAndPush
               repository: $(ACR_NAME).azurecr.io/guardian-ai-fast-screening
               dockerfile: services/fast-screening/Dockerfile
               containerRegistry: 'guardian-acr-connection'
@@ -82,19 +72,9 @@ stages:
                 latest
 
           - task: Docker@2
-            displayName: 'Push fast-screening'
+            displayName: 'Build and Push deep-vision'
             inputs:
-              command: push
-              repository: $(ACR_NAME).azurecr.io/guardian-ai-fast-screening
-              containerRegistry: 'guardian-acr-connection'
-              tags: |
-                $(Build.BuildId)
-                latest
-
-          - task: Docker@2
-            displayName: 'Build deep-vision'
-            inputs:
-              command: build
+              command: buildAndPush
               repository: $(ACR_NAME).azurecr.io/guardian-ai-deep-vision
               dockerfile: services/deep-vision/Dockerfile
               containerRegistry: 'guardian-acr-connection'
@@ -103,19 +83,9 @@ stages:
                 latest
 
           - task: Docker@2
-            displayName: 'Push deep-vision'
+            displayName: 'Build and Push policy-engine'
             inputs:
-              command: push
-              repository: $(ACR_NAME).azurecr.io/guardian-ai-deep-vision
-              containerRegistry: 'guardian-acr-connection'
-              tags: |
-                $(Build.BuildId)
-                latest
-
-          - task: Docker@2
-            displayName: 'Build policy-engine'
-            inputs:
-              command: build
+              command: buildAndPush
               repository: $(ACR_NAME).azurecr.io/guardian-ai-policy-engine
               dockerfile: services/policy-engine/Dockerfile
               containerRegistry: 'guardian-acr-connection'
@@ -124,19 +94,9 @@ stages:
                 latest
 
           - task: Docker@2
-            displayName: 'Push policy-engine'
+            displayName: 'Build and Push human-review'
             inputs:
-              command: push
-              repository: $(ACR_NAME).azurecr.io/guardian-ai-policy-engine
-              containerRegistry: 'guardian-acr-connection'
-              tags: |
-                $(Build.BuildId)
-                latest
-
-          - task: Docker@2
-            displayName: 'Build human-review'
-            inputs:
-              command: build
+              command: buildAndPush
               repository: $(ACR_NAME).azurecr.io/guardian-ai-human-review
               dockerfile: services/human-review/Dockerfile
               containerRegistry: 'guardian-acr-connection'
@@ -145,19 +105,9 @@ stages:
                 latest
 
           - task: Docker@2
-            displayName: 'Push human-review'
+            displayName: 'Build and Push notification'
             inputs:
-              command: push
-              repository: $(ACR_NAME).azurecr.io/guardian-ai-human-review
-              containerRegistry: 'guardian-acr-connection'
-              tags: |
-                $(Build.BuildId)
-                latest
-
-          - task: Docker@2
-            displayName: 'Build notification'
-            inputs:
-              command: build
+              command: buildAndPush
               repository: $(ACR_NAME).azurecr.io/guardian-ai-notification
               dockerfile: services/notification/Dockerfile
               containerRegistry: 'guardian-acr-connection'
@@ -166,19 +116,9 @@ stages:
                 latest
 
           - task: Docker@2
-            displayName: 'Push notification'
+            displayName: 'Build and Push api-gateway'
             inputs:
-              command: push
-              repository: $(ACR_NAME).azurecr.io/guardian-ai-notification
-              containerRegistry: 'guardian-acr-connection'
-              tags: |
-                $(Build.BuildId)
-                latest
-
-          - task: Docker@2
-            displayName: 'Build api-gateway'
-            inputs:
-              command: build
+              command: buildAndPush
               repository: $(ACR_NAME).azurecr.io/guardian-ai-api-gateway
               dockerfile: services/api-gateway/Dockerfile
               containerRegistry: 'guardian-acr-connection'
@@ -187,31 +127,11 @@ stages:
                 latest
 
           - task: Docker@2
-            displayName: 'Push api-gateway'
+            displayName: 'Build and Push frontend'
             inputs:
-              command: push
-              repository: $(ACR_NAME).azurecr.io/guardian-ai-api-gateway
-              containerRegistry: 'guardian-acr-connection'
-              tags: |
-                $(Build.BuildId)
-                latest
-
-          - task: Docker@2
-            displayName: 'Build frontend'
-            inputs:
-              command: build
+              command: buildAndPush
               repository: $(ACR_NAME).azurecr.io/guardian-ai-frontend
               dockerfile: frontend/Dockerfile
-              containerRegistry: 'guardian-acr-connection'
-              tags: |
-                $(Build.BuildId)
-                latest
-
-          - task: Docker@2
-            displayName: 'Push frontend'
-            inputs:
-              command: push
-              repository: $(ACR_NAME).azurecr.io/guardian-ai-frontend
               containerRegistry: 'guardian-acr-connection'
               tags: |
                 $(Build.BuildId)
