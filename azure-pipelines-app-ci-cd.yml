@@ -231,17 +231,4 @@ stages:
                     kubectl get deployments -n $(NAMESPACE)
                   displayName: 'Verify Deployment'
                   env:
-                    NAMESPACE: $(NAMESPACE)tatus deployment/deep-vision -n $(NAMESPACE) --timeout=5m || true
-                    kubectl rollout status deployment/policy-engine -n $(NAMESPACE) --timeout=5m || true
-                  displayName: 'Deploy to Kubernetes'
-                  env:
-                    ACR_NAME: $(ACR_NAME)
-                    NAMESPACE: $(NAMESPACE)
-
-                - script: |
-                    echo "Verifying deployments..."
-                    kubectl get pods -n $(NAMESPACE)
-                    kubectl get deployments -n $(NAMESPACE)
-                  displayName: 'Verify Deployment'
-                  env:
                     NAMESPACE: $(NAMESPACE)
