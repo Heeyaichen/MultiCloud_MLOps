@@ -49,8 +49,8 @@ stages:
 
           - script: |
               echo "Building ingestion..."
-              $(DOCKER_PATH) buildx create --name guardian-builder --use || $(DOCKER_PATH) buildx use guardian-builder
-              $(DOCKER_PATH) buildx build \
+              $DOCKER_PATH buildx create --name guardian-builder --use || $DOCKER_PATH buildx use guardian-builder
+              $DOCKER_PATH buildx build \
                 --platform linux/amd64 \
                 -t $(ACR_NAME).azurecr.io/guardian-ai-ingestion:$(Build.BuildId) \
                 -t $(ACR_NAME).azurecr.io/guardian-ai-ingestion:latest \
@@ -59,11 +59,12 @@ stages:
             displayName: 'Build ingestion'
             env:
               ACR_NAME: $(ACR_NAME)
+              DOCKER_PATH: $(DOCKER_PATH)
 
           - script: |
               echo "Building fast-screening..."
-              $(DOCKER_PATH) buildx create --name guardian-builder --use || $(DOCKER_PATH) buildx use guardian-builder
-              $(DOCKER_PATH) buildx build \
+              $DOCKER_PATH buildx create --name guardian-builder --use || $DOCKER_PATH buildx use guardian-builder
+              $DOCKER_PATH buildx build \
                 --platform linux/amd64 \
                 -t $(ACR_NAME).azurecr.io/guardian-ai-fast-screening:$(Build.BuildId) \
                 -t $(ACR_NAME).azurecr.io/guardian-ai-fast-screening:latest \
@@ -72,11 +73,12 @@ stages:
             displayName: 'Build fast-screening'
             env:
               ACR_NAME: $(ACR_NAME)
+              DOCKER_PATH: $(DOCKER_PATH)
 
           - script: |
               echo "Building deep-vision..."
-              $(DOCKER_PATH) buildx create --name guardian-builder --use || $(DOCKER_PATH) buildx use guardian-builder
-              $(DOCKER_PATH) buildx build \
+              $DOCKER_PATH buildx create --name guardian-builder --use || $DOCKER_PATH buildx use guardian-builder
+              $DOCKER_PATH buildx build \
                 --platform linux/amd64 \
                 -t $(ACR_NAME).azurecr.io/guardian-ai-deep-vision:$(Build.BuildId) \
                 -t $(ACR_NAME).azurecr.io/guardian-ai-deep-vision:latest \
@@ -85,11 +87,12 @@ stages:
             displayName: 'Build deep-vision'
             env:
               ACR_NAME: $(ACR_NAME)
+              DOCKER_PATH: $(DOCKER_PATH)
 
           - script: |
               echo "Building policy-engine..."
-              $(DOCKER_PATH) buildx create --name guardian-builder --use || $(DOCKER_PATH) buildx use guardian-builder
-              $(DOCKER_PATH) buildx build \
+              $DOCKER_PATH buildx create --name guardian-builder --use || $DOCKER_PATH buildx use guardian-builder
+              $DOCKER_PATH buildx build \
                 --platform linux/amd64 \
                 -t $(ACR_NAME).azurecr.io/guardian-ai-policy-engine:$(Build.BuildId) \
                 -t $(ACR_NAME).azurecr.io/guardian-ai-policy-engine:latest \
@@ -98,11 +101,12 @@ stages:
             displayName: 'Build policy-engine'
             env:
               ACR_NAME: $(ACR_NAME)
+              DOCKER_PATH: $(DOCKER_PATH)
 
           - script: |
               echo "Building human-review..."
-              $(DOCKER_PATH) buildx create --name guardian-builder --use || $(DOCKER_PATH) buildx use guardian-builder
-              $(DOCKER_PATH) buildx build \
+              $DOCKER_PATH buildx create --name guardian-builder --use || $DOCKER_PATH buildx use guardian-builder
+              $DOCKER_PATH buildx build \
                 --platform linux/amd64 \
                 -t $(ACR_NAME).azurecr.io/guardian-ai-human-review:$(Build.BuildId) \
                 -t $(ACR_NAME).azurecr.io/guardian-ai-human-review:latest \
@@ -111,11 +115,12 @@ stages:
             displayName: 'Build human-review'
             env:
               ACR_NAME: $(ACR_NAME)
+              DOCKER_PATH: $(DOCKER_PATH)
 
           - script: |
               echo "Building notification..."
-              $(DOCKER_PATH) buildx create --name guardian-builder --use || $(DOCKER_PATH) buildx use guardian-builder
-              $(DOCKER_PATH) buildx build \
+              $DOCKER_PATH buildx create --name guardian-builder --use || $DOCKER_PATH buildx use guardian-builder
+              $DOCKER_PATH buildx build \
                 --platform linux/amd64 \
                 -t $(ACR_NAME).azurecr.io/guardian-ai-notification:$(Build.BuildId) \
                 -t $(ACR_NAME).azurecr.io/guardian-ai-notification:latest \
@@ -124,11 +129,12 @@ stages:
             displayName: 'Build notification'
             env:
               ACR_NAME: $(ACR_NAME)
+              DOCKER_PATH: $(DOCKER_PATH)
 
           - script: |
               echo "Building api-gateway..."
-              $(DOCKER_PATH) buildx create --name guardian-builder --use || $(DOCKER_PATH) buildx use guardian-builder
-              $(DOCKER_PATH) buildx build \
+              $DOCKER_PATH buildx create --name guardian-builder --use || $DOCKER_PATH buildx use guardian-builder
+              $DOCKER_PATH buildx build \
                 --platform linux/amd64 \
                 -t $(ACR_NAME).azurecr.io/guardian-ai-api-gateway:$(Build.BuildId) \
                 -t $(ACR_NAME).azurecr.io/guardian-ai-api-gateway:latest \
@@ -137,11 +143,12 @@ stages:
             displayName: 'Build api-gateway'
             env:
               ACR_NAME: $(ACR_NAME)
+              DOCKER_PATH: $(DOCKER_PATH)
 
           - script: |
               echo "Building frontend..."
-              $(DOCKER_PATH) buildx create --name guardian-builder --use || $(DOCKER_PATH) buildx use guardian-builder
-              $(DOCKER_PATH) buildx build \
+              $DOCKER_PATH buildx create --name guardian-builder --use || $DOCKER_PATH buildx use guardian-builder
+              $DOCKER_PATH buildx build \
                 --platform linux/amd64 \
                 -t $(ACR_NAME).azurecr.io/guardian-ai-frontend:$(Build.BuildId) \
                 -t $(ACR_NAME).azurecr.io/guardian-ai-frontend:latest \
@@ -150,6 +157,7 @@ stages:
             displayName: 'Build Frontend'
             env:
               ACR_NAME: $(ACR_NAME)
+              DOCKER_PATH: $(DOCKER_PATH)
 
   - stage: Deploy
     displayName: 'Deploy to AKS'
@@ -211,6 +219,19 @@ stages:
                     kubectl rollout status deployment/ingestion -n $(NAMESPACE) --timeout=5m || true
                     kubectl rollout status deployment/fast-screening -n $(NAMESPACE) --timeout=5m || true
                     kubectl rollout status deployment/deep-vision -n $(NAMESPACE) --timeout=5m || true
+                    kubectl rollout status deployment/policy-engine -n $(NAMESPACE) --timeout=5m || true
+                  displayName: 'Deploy to Kubernetes'
+                  env:
+                    ACR_NAME: $(ACR_NAME)
+                    NAMESPACE: $(NAMESPACE)
+
+                - script: |
+                    echo "Verifying deployments..."
+                    kubectl get pods -n $(NAMESPACE)
+                    kubectl get deployments -n $(NAMESPACE)
+                  displayName: 'Verify Deployment'
+                  env:
+                    NAMESPACE: $(NAMESPACE)tatus deployment/deep-vision -n $(NAMESPACE) --timeout=5m || true
                     kubectl rollout status deployment/policy-engine -n $(NAMESPACE) --timeout=5m || true
                   displayName: 'Deploy to Kubernetes'
                   env:
