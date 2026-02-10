@@ -131,18 +131,155 @@ Service connections allow Azure DevOps to access your Azure resources.
 
 ---
 
-### Phase 1.3: Create Application CI/CD Pipeline
+### Phase 1.3: Setup Self-Hosted Agent (macOS/Linux)
+
+The pipelines use `pool: name: 'Default'`, which requires a self-hosted agent. This phase sets up the agent on your local machine (macOS or Linux).
+
+#### Step 1.3.1: Verify/Create Default Agent Pool
+
+1. Go to **Azure DevOps** → Your project (`guardian-ai-mlops`)
+2. Click **Project Settings** (gear icon, bottom left)
+3. Under **Pipelines**, click **"Agent pools"**
+4. Verify **"Default"** pool exists (it should exist by default)
+5. If it doesn't exist:
+   - Click **"+ Add pool"**
+   - Select **"Self-hosted"**
+   - Name: `Default`
+   - Click **"Create"**
+
+**Note**: The pipeline YAML uses `pool: name: 'Default'`, so ensure this pool exists.
+
+#### Step 1.3.2: Create Personal Access Token (PAT)
+
+1. In Azure DevOps, click your profile (top right) → **"Personal access tokens"**
+2. Click **"+ New Token"**
+3. Fill in:
+   - **Name**: `Self-hosted Agent Token` (or any descriptive name)
+   - **Organization**: Select your organization
+   - **Expiration**: Choose expiration (90 days recommended for learning)
+   - **Scopes**: Select **"Full access"** (for learning) or **"Agent Pools (Read & manage)"** (more secure)
+4. Click **"Create"**
+5. **Important**: Copy the token immediately (you won't see it again)
+   - Format: `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+   - Save it securely (you'll need it in Step 1.3.5)
+
+#### Step 1.3.3: Download Agent Software
+
+1. In Azure DevOps, go to **Project Settings** → **Agent pools**
+2. Click on **"Default"** pool
+3. Click **"New agent"**
+4. Select your OS:
+   - **macOS**: Download `vsts-agent-osx-x64-*.tar.gz` (or `vsts-agent-osx-arm64-*.tar.gz` for Apple Silicon)
+   - **Linux**: Download `vsts-agent-linux-x64-*.tar.gz`
+5. Extract the archive:
+   ```bash
+   # macOS
+   cd ~/Downloads
+   tar -xzf vsts-agent-osx-x64-*.tar.gz
+   cd vsts-agent-osx-x64-*
+   
+   # Linux
+   cd ~/Downloads
+   tar -xzf vsts-agent-linux-x64-*.tar.gz
+   cd vsts-agent-linux-x64-*
+   ```
+
+#### Step 1.3.4: Configure Agent (macOS - Gatekeeper Fix)
+
+**Important for macOS**: macOS Gatekeeper may block the agent scripts. Fix this first:
+
+```bash
+# Navigate to agent directory
+cd ~/Downloads/vsts-agent-osx-x64-*  # or vsts-agent-osx-arm64-* for Apple Silicon
+
+# Remove quarantine attributes (allows scripts to run)
+xattr -cr .
+```
+
+**Why this is needed**: macOS Gatekeeper blocks unsigned executables. This command removes the quarantine attribute so `./config.sh` and `./run.sh` can execute.
+
+**Note**: On Linux, skip this step (the `xattr` command is macOS-specific).
+
+#### Step 1.3.5: Configure Agent
+
+1. Run the configuration script:
+   ```bash
+   ./config.sh
+   ```
+
+2. When prompted, enter:
+   - **Server URL**: `https://dev.azure.com/<your-org-name>`
+     - Example: `https://dev.azure.com/guardian-ai-org`
+     - **Important**: Use only the organization URL, NOT the project URL
+   - **Authentication type**: `PAT` (Personal Access Token)
+   - **Personal Access Token**: Paste the token from Step 1.3.2
+   - **Agent pool**: `Default` (or press Enter for default)
+   - **Agent name**: Your machine name (e.g., `Heeyaichens-Mac-mini`) or press Enter for auto-generated name
+   - **Work folder**: Press Enter for default (`_work`)
+
+3. Configuration completes successfully when you see:
+   ```
+   ✓ Successfully added the agent
+   ```
+
+#### Step 1.3.6: Run Agent
+
+1. Start the agent:
+   ```bash
+   ./run.sh
+   ```
+
+2. You should see:
+   ```
+   Scanning for tool capabilities.
+   Connecting to the server.
+   Listening for Jobs
+   ```
+
+3. **Keep this terminal open** - the agent must stay running to pick up pipeline jobs.
+
+4. **For other terminal tasks**: Open a new terminal window/tab (don't close the agent terminal).
+
+#### Step 1.3.7: Verify Agent is Online
+
+1. In Azure DevOps, go to **Project Settings** → **Agent pools** → **Default**
+2. You should see your agent listed with status **"Online"** (green dot)
+3. If it shows **"Offline"**:
+   - Check the terminal where `./run.sh` is running for errors
+   - Verify PAT token hasn't expired
+   - Verify server URL is correct (organization only, no project path)
+
+#### Troubleshooting Agent Setup
+
+**Issue: "No agent found" when running pipeline**
+- Verify agent pool name matches pipeline YAML (`Default`)
+- Check agent is online in Azure DevOps
+- Ensure `./run.sh` is running in a terminal
+
+**Issue: "xattr: command not found" (Linux)**
+- The `xattr -cr .` command is macOS-specific. On Linux, skip Step 1.3.4.
+
+**Issue: Agent shows "Offline" but `./run.sh` is running**
+- Check server URL is correct (organization only: `https://dev.azure.com/<org>`, not `https://dev.azure.com/<org>/<project>`)
+- Verify PAT token is valid and has correct permissions
+- Run `xattr -cr .` in the agent directory before `./config.sh` (macOS only)
+
+**Note**: For Apple Silicon Macs, consider using the ARM64 agent (`vsts-agent-osx-arm64-*.tar.gz`) to avoid X64 emulation warnings and improve performance.
+
+---
+
+### Phase 1.4: Create Application CI/CD Pipeline
 
 This pipeline builds Docker images and deploys to AKS.
 
-#### Step 1.3.1: Create Pipeline YAML File
+#### Step 1.4.1: Create Pipeline YAML File
 1. In your project, go to **Repos** → **Files**
 2. Navigate to root directory
 3. Click **"New"** → **"File"**
 4. Name: `azure-pipelines-app-ci-cd.yml`
 6. Click **"Commit"** to save the file
 
-#### Step 1.3.2: Create Variable Group (Required)
+#### Step 1.4.2: Create Variable Group (Required)
 The pipeline uses **only** the variable group for env-specific values; there are no hardcoded ACR or cluster names in the YAML. Each learner must create this group and set their own values so the same pipeline file works for everyone.
 
 1. In your project, go to **Pipelines** → **Library**
@@ -157,7 +294,7 @@ The pipeline uses **only** the variable group for env-specific values; there are
 
 If any of these variables are missing, the pipeline will fail when it runs. Do not edit the pipeline YAML to hardcode values—use this variable group so each user can run the project with their own ACR and cluster.
 
-#### Step 1.3.3: Create Pipeline from YAML
+#### Step 1.4.3: Create Pipeline from YAML
 1. Go to **Pipelines** → **Pipelines**
 2. Click **"Create Pipeline"**
 3. Select **"Azure Repos Git"** (or GitHub if using GitHub)
@@ -168,7 +305,7 @@ If any of these variables are missing, the pipeline will fail when it runs. Do n
 8. Click **"Continue"**
 9. Review the pipeline, click **"Run"**
 
-#### Step 1.3.4: Verify Pipeline Runs Successfully
+#### Step 1.4.4: Verify Pipeline Runs Successfully
 1. Go to **Pipelines** → **Pipelines**
 2. Click on your pipeline: `MLOps_Project`
 3. Watch the build progress
@@ -810,6 +947,7 @@ Your `mlops/deployment/rollback_model.py` script is ready. You can trigger it ma
 - [ ] Project created
 - [ ] Repository imported/connected
 - [ ] Service connections created (Azure, ACR, AKS)
+- [ ] Self-hosted agent configured and online
 - [ ] Application CI/CD pipeline created and tested
 - [ ] ML training pipeline created
 - [ ] ML deployment pipeline created
