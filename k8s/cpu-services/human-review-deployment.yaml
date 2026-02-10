@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: human-review
-        image: guardianacr58206.azurecr.io/guardian-ai-human-review:v1
+        image: guardianacr23630.azurecr.io/guardian-ai-human-review:v1
         ports:
         - containerPort: 8000
         envFrom:

@@ -6,11 +6,11 @@ metadata:
 data:
   # AWS Configuration
   AWS_REGION: "ap-south-1"
-  S3_BUCKET_NAME: "guardian-videos-00518564"
+  S3_BUCKET_NAME: "guardian-videos-44204252"
   
   # Simplified SQS Queues (2 queues)
-  SQS_QUEUE_URL: "https://sqs.ap-south-1.amazonaws.com/005185643085/guardian-video-processing"
-  SQS_GPU_QUEUE_URL: "https://sqs.ap-south-1.amazonaws.com/005185643085/guardian-gpu-processing"
+  SQS_QUEUE_URL: "https://sqs.ap-south-1.amazonaws.com/442042521384/guardian-video-processing"
+  SQS_GPU_QUEUE_URL: "https://sqs.ap-south-1.amazonaws.com/442042521384/guardian-gpu-processing"
   
   # Simplified DynamoDB Tables (2 tables)
   DYNAMODB_VIDEOS_TABLE: "guardian-videos"
