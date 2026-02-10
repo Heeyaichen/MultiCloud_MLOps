@@ -4,14 +4,14 @@
 trigger: none  # Manual trigger
 
 pool:
-  vmImage: 'ubuntu-latest'
+  name: 'Default'
 
 variables:
   - group: guardian-variables
   - name: AZURE_SUBSCRIPTION_ID
     value: 'your-subscription-id'  # Replace with your subscription ID
   - name: AZURE_RESOURCE_GROUP
-    value: 'rg-guardian-ai-prod'
+    value: 'guardian-ai-prod'
   - name: AZURE_ML_WORKSPACE
     value: 'guardian-ml-workspace'
 

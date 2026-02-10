@@ -894,14 +894,14 @@ bash scripts/setup-mlops.sh
 # Verify workspace was created
 az ml workspace show \
   --name guardian-ml-workspace \
-  --resource-group rg-guardian-ai-prod
+  --resource-group guardian-ai-prod
 ```
 
 ### Step 8.5.2: Train Models (Optional)
 ```bash
 # Set environment variables
 export AZURE_SUBSCRIPTION_ID="your-subscription-id"
-export AZURE_RESOURCE_GROUP="rg-guardian-ai-prod"
+export AZURE_RESOURCE_GROUP="guardian-ai-prod"
 export AZURE_ML_WORKSPACE="guardian-ml-workspace"
 export MLFLOW_TRACKING_URI="azureml://your-workspace"
 
@@ -930,7 +930,7 @@ bash scripts/get-model-endpoints.sh violence-detector
 # Or manually get endpoints:
 az ml online-endpoint show \
   --name nsfw-detector-endpoint \
-  --resource-group rg-guardian-ai-prod \
+  --resource-group guardian-ai-prod \
   --workspace-name guardian-ml-workspace \
   --query scoring_uri -o tsv
 ```

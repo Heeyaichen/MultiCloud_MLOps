@@ -23,7 +23,7 @@ This guide walks you through setting up:
 
 ### Required Azure Resources (Already Created)
 - ✅ Azure Subscription
-- ✅ Resource Group: `rg-guardian-ai-prod`
+- ✅ Resource Group: `guardian-ai-prod`
 - ✅ AKS Cluster: `guardian-ai-aks` (or your cluster name)
 - ✅ ACR: `guardianacr58206` (or your ACR name)
 - ✅ Azure ML Workspace: `guardian-ml-workspace` (create if not exists)
@@ -98,7 +98,7 @@ Service connections allow Azure DevOps to access your Azure resources.
 7. Click **"Next"**
 8. Fill in:
    - **Subscription**: Select your Azure subscription
-   - **Resource group**: `rg-guardian-ai-prod`
+   - **Resource group**: `guardian-ai-prod`
    - **Service connection name**: `guardian-azure-connection`
    - **Security**: Grant access permission to all pipelines (or specific pipelines)
 9. Click **"Save"**
@@ -121,7 +121,7 @@ Service connections allow Azure DevOps to access your Azure resources.
 3. Select **"Azure subscription"**
 4. Fill in:
    - **Subscription**: Select your subscription
-   - **Resource group**: `rg-guardian-ai-prod`
+   - **Resource group**: `guardian-ai-prod`
    - **Kubernetes cluster**: `guardian-ai-aks` (or your cluster name)
    - **Namespace**: `production`
    - Disable: Use cluster admin credentials
@@ -151,7 +151,7 @@ The pipeline uses **only** the variable group for env-specific values; there are
 4. Add the following variables (use **your own** values from your Azure setup):
    - **`ACR_NAME`**: Your Azure Container Registry name (e.g. the name from `az acr create --name <ACR_NAME> ...`). Example: `guardianacr58206`
    - **`AKS_CLUSTER`**: Your AKS cluster name. Example: `guardian-ai-aks`
-   - **`RESOURCE_GROUP`**: The resource group containing ACR and AKS. Example: `rg-guardian-ai-prod`
+   - **`RESOURCE_GROUP`**: The resource group containing ACR and AKS. Example: `guardian-ai-prod`
    - **`NAMESPACE`**: Kubernetes namespace for the app. Example: `production`
 5. Click **"Save"**
 
@@ -187,13 +187,13 @@ If any of these variables are missing, the pipeline will fail when it runs. Do n
 #### Step 2.1.1: Check if Workspace Exists
 1. Go to [Azure Portal](https://portal.azure.com)
 2. Search for **"Machine Learning"**
-3. Check if workspace `guardian-ml-workspace` exists in resource group `rg-guardian-ai-prod`
+3. Check if workspace `guardian-ml-workspace` exists in resource group `guardian-ai-prod`
 
 #### Step 2.1.2: Create Workspace (if not exists)
 1. Click **"+ Create"**
 2. Fill in:
    - **Subscription**: Your subscription
-   - **Resource group**: `rg-guardian-ai-prod`
+   - **Resource group**: `guardian-ai-prod`
    - **Workspace name**: `guardian-ml-workspace`
    - **Region**: Same as your AKS cluster
    - **Storage account**: Create new (auto-generated name)
@@ -207,7 +207,7 @@ If any of these variables are missing, the pipeline will fail when it runs. Do n
 1. Go to your workspace: `guardian-ml-workspace`
 2. Note down:
    - **Workspace name**: `guardian-ml-workspace`
-   - **Resource group**: `rg-guardian-ai-prod`
+   - **Resource group**: `guardian-ai-prod`
    - **Subscription ID**: (from Overview page)
    - **MLflow tracking URI**: (from Overview → Properties, format: `azureml://eastus.api.azureml.ms/mlflow/v1.0/subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.MachineLearningServices/workspaces/<workspace>`)
 
@@ -273,7 +273,7 @@ variables:
   - name: AZURE_SUBSCRIPTION_ID
     value: 'your-subscription-id'  # Replace with your subscription ID
   - name: AZURE_RESOURCE_GROUP
-    value: 'rg-guardian-ai-prod'
+    value: 'guardian-ai-prod'
   - name: AZURE_ML_WORKSPACE
     value: 'guardian-ml-workspace'
   - name: COMPUTE_CLUSTER
@@ -391,7 +391,7 @@ variables:
   - name: AZURE_SUBSCRIPTION_ID
     value: 'your-subscription-id'  # Replace
   - name: AZURE_RESOURCE_GROUP
-    value: 'rg-guardian-ai-prod'
+    value: 'guardian-ai-prod'
   - name: AZURE_ML_WORKSPACE
     value: 'guardian-ml-workspace'
 
@@ -520,21 +520,21 @@ echo "🔍 Getting Azure ML endpoint information..."
 # Get NSFW endpoint
 NSFW_ENDPOINT=$(az ml online-endpoint show \
   --name nsfw-detector-endpoint \
-  --resource-group rg-guardian-ai-prod \
+  --resource-group guardian-ai-prod \
   --workspace-name guardian-ml-workspace \
   --query scoring_uri -o tsv 2>/dev/null || echo "")
 
 # Get Violence endpoint
 VIOLENCE_ENDPOINT=$(az ml online-endpoint show \
   --name violence-detector-endpoint \
-  --resource-group rg-guardian-ai-prod \
+  --resource-group guardian-ai-prod \
   --workspace-name guardian-ml-workspace \
   --query scoring_uri -o tsv 2>/dev/null || echo "")
 
 # Get endpoint key (same for both endpoints)
 ENDPOINT_KEY=$(az ml online-endpoint get-credentials \
   --name nsfw-detector-endpoint \
-  --resource-group rg-guardian-ai-prod \
+  --resource-group guardian-ai-prod \
   --workspace-name guardian-ml-workspace \
   --query primaryKey -o tsv 2>/dev/null || echo "")
 
@@ -648,7 +648,7 @@ kubectl logs -l app=deep-vision -n production --tail=20
 5. Test endpoint (optional):
    ```bash
    # Get endpoint URL and key
-   az ml online-endpoint show --name nsfw-detector-endpoint --resource-group rg-guardian-ai-prod --workspace-name guardian-ml-workspace --query scoring_uri -o tsv
+   az ml online-endpoint show --name nsfw-detector-endpoint --resource-group guardian-ai-prod --workspace-name guardian-ml-workspace --query scoring_uri -o tsv
    
    # Test with curl (replace with actual values)
    curl -X POST <endpoint-url> \
