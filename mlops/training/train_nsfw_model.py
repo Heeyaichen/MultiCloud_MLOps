@@ -40,8 +40,10 @@ def train_nsfw_model():
         workspace_name=os.getenv("AZURE_ML_WORKSPACE")
     )
     
-    # MLflow setup - use Azure ML workspace tracking
-    tracking_uri = ml_client.workspaces.get(ml_client.workspace_name).mlflow_tracking_uri
+    # MLflow setup - use environment variable if set (from pipeline), otherwise get from MLClient
+    tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
+    if not tracking_uri:
+        tracking_uri = ml_client.workspaces.get(ml_client.workspace_name).mlflow_tracking_uri
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment("nsfw-detection")
     
@@ -155,8 +157,10 @@ def train_violence_model():
         workspace_name=os.getenv("AZURE_ML_WORKSPACE")
     )
     
-    # MLflow setup - use Azure ML workspace tracking
-    tracking_uri = ml_client.workspaces.get(ml_client.workspace_name).mlflow_tracking_uri
+    # MLflow setup - use environment variable if set (from pipeline), otherwise get from MLClient
+    tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
+    if not tracking_uri:
+        tracking_uri = ml_client.workspaces.get(ml_client.workspace_name).mlflow_tracking_uri
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment("violence-detection")
     
