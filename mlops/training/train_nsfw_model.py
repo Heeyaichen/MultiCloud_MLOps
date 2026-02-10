@@ -40,8 +40,9 @@ def train_nsfw_model():
         workspace_name=os.getenv("AZURE_ML_WORKSPACE")
     )
     
-    # MLflow setup
-    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
+    # MLflow setup - use Azure ML workspace tracking
+    tracking_uri = ml_client.workspaces.get(ml_client.workspace_name).mlflow_tracking_uri
+    mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment("nsfw-detection")
     
     with mlflow.start_run(run_name=f"nsfw-training-{datetime.now().strftime('%Y%m%d-%H%M%S')}"):
@@ -146,7 +147,17 @@ def train_nsfw_model():
 
 def train_violence_model():
     """Train violence detection model"""
-    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
+    # Setup Azure ML
+    ml_client = MLClient(
+        DefaultAzureCredential(),
+        subscription_id=os.getenv("AZURE_SUBSCRIPTION_ID"),
+        resource_group_name=os.getenv("AZURE_RESOURCE_GROUP"),
+        workspace_name=os.getenv("AZURE_ML_WORKSPACE")
+    )
+    
+    # MLflow setup - use Azure ML workspace tracking
+    tracking_uri = ml_client.workspaces.get(ml_client.workspace_name).mlflow_tracking_uri
+    mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment("violence-detection")
     
     with mlflow.start_run(run_name=f"violence-training-{datetime.now().strftime('%Y%m%d-%H%M%S')}"):
@@ -180,13 +191,10 @@ def train_violence_model():
         print(f"✅ Violence model trained! Final accuracy: {accuracy:.2%}")
 
 if __name__ == "__main__":
-    print("🎯 Guardian AI - Model Training Pipeline")
+    print("🎯 Guardian AI - NSFW Detection Model Training")
     print("="*50)
     
     print("\n📦 Training NSFW Detection Model...")
     train_nsfw_model()
     
-    print("\n📦 Training Violence Detection Model...")
-    train_violence_model()
-    
-    print("\n🎉 All models trained successfully!")
+    print("\n🎉 NSFW model trained successfully!")

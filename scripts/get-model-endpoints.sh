@@ -17,8 +17,8 @@ if ! command -v az &> /dev/null; then
 fi
 
 # Get environment variables
-RESOURCE_GROUP=${AZURE_RESOURCE_GROUP:-"rg-guardian-ai-prod"}
-WORKSPACE_NAME=${AZURE_ML_WORKSPACE:-"guardian-ml-workspace"}
+RESOURCE_GROUP=${AZURE_RESOURCE_GROUP:-"guardian-ai-prod"}
+WORKSPACE_NAME=${AZURE_ML_WORKSPACE:-"guardian-ml-workspace-prod"}
 
 # Get endpoint details
 SCORING_URI=$(az ml online-endpoint show \
@@ -48,9 +48,17 @@ echo ""
 echo "📝 To update your ConfigMap or .env file, use these values:"
 echo ""
 echo "For Kubernetes ConfigMap:"
-echo "  NSFW_MODEL_ENDPOINT: \"${SCORING_URI}\""
+if [[ "$MODEL_NAME" == "nsfw-detector" ]]; then
+  echo "  NSFW_MODEL_ENDPOINT: \"${SCORING_URI}\""
+else
+  echo "  VIOLENCE_MODEL_ENDPOINT: \"${SCORING_URI}\""
+fi
 echo "  MODEL_ENDPOINT_KEY: \"${ENDPOINT_KEY}\""
 echo ""
 echo "For docker-compose.yml or .env:"
-echo "  NSFW_MODEL_ENDPOINT=${SCORING_URI}"
+if [[ "$MODEL_NAME" == "nsfw-detector" ]]; then
+  echo "  NSFW_MODEL_ENDPOINT=${SCORING_URI}"
+else
+  echo "  VIOLENCE_MODEL_ENDPOINT=${SCORING_URI}"
+fi
 echo "  MODEL_ENDPOINT_KEY=${ENDPOINT_KEY}"

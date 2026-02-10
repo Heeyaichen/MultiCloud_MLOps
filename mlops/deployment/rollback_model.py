@@ -7,8 +7,8 @@ def rollback_model(model_name="nsfw-detector"):
     ml_client = MLClient(
         DefaultAzureCredential(),
         subscription_id=os.getenv("AZURE_SUBSCRIPTION_ID"),
-        resource_group_name=os.getenv("AZURE_RESOURCE_GROUP", "rg-guardian-ai-prod"),
-        workspace_name=os.getenv("AZURE_ML_WORKSPACE", "guardian-ml-workspace")
+        resource_group_name=os.getenv("AZURE_RESOURCE_GROUP", "guardian-ai-prod"),
+        workspace_name=os.getenv("AZURE_ML_WORKSPACE", "guardian-ml-workspace-prod")
     )
     
     endpoint_name = f"{model_name}-endpoint"

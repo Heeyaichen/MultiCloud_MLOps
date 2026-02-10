@@ -7,8 +7,8 @@ set -e
 echo "🔍 Getting Azure ML endpoint information..."
 
 # Get environment variables (or set defaults)
-RESOURCE_GROUP=${AZURE_RESOURCE_GROUP:-"rg-guardian-ai-prod"}
-WORKSPACE_NAME=${AZURE_ML_WORKSPACE:-"guardian-ml-workspace"}
+RESOURCE_GROUP=${AZURE_RESOURCE_GROUP:-"guardian-ai-prod"}
+WORKSPACE_NAME=${AZURE_ML_WORKSPACE:-"guardian-ml-workspace-prod"}
 
 # Get NSFW endpoint
 NSFW_ENDPOINT=$(az ml online-endpoint show \

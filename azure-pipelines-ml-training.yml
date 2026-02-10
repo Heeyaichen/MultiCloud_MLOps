@@ -11,7 +11,7 @@ variables:
   - name: AZURE_RESOURCE_GROUP
     value: 'guardian-ai-prod'
   - name: AZURE_ML_WORKSPACE
-    value: 'guardian-ml-workspace'
+    value: 'guardian-ml-workspace-prod'
   - name: COMPUTE_CLUSTER
     value: 'cpu-training-cluster'
 
@@ -78,7 +78,7 @@ stages:
 
           - script: |
               python -m pip install --upgrade pip
-              pip install azure-ai-ml azure-identity mlflow torch torchvision transformers pillow numpy
+              pip install azure-ai-ml azure-identity mlflow azureml-mlflow torch torchvision transformers pillow numpy
             displayName: 'Install dependencies'
 
           - task: AzureCLI@2
@@ -179,7 +179,7 @@ stages:
 
           - script: |
               python -m pip install --upgrade pip
-              pip install azure-ai-ml azure-identity mlflow torch torchvision transformers pillow numpy
+              pip install azure-ai-ml azure-identity mlflow azureml-mlflow torch torchvision transformers pillow numpy
             displayName: 'Install dependencies'
 
           - task: AzureCLI@2
@@ -214,7 +214,7 @@ stages:
               export MLFLOW_TRACKING_URI="azureml://$(AZURE_ML_WORKSPACE).api.azureml.ms/mlflow/v1.0/subscriptions/$(AZURE_SUBSCRIPTION_ID)/resourceGroups/$(AZURE_RESOURCE_GROUP)/providers/Microsoft.MachineLearningServices/workspaces/$(AZURE_ML_WORKSPACE)"
               
               cd mlops/training
-              python train_nsfw_model.py  # Modify to train violence model or create separate script
+              python train_violence_model.py
             displayName: 'Train Violence Model'
             env:
               AZURE_SUBSCRIPTION_ID: $(AZURE_SUBSCRIPTION_ID)
