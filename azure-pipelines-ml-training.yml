@@ -115,13 +115,18 @@ stages:
               export AZURE_ML_REGION="$(AZURE_ML_REGION)"
               export MLFLOW_TRACKING_URI="azureml://$(AZURE_ML_REGION).api.azureml.ms/mlflow/v1.0/subscriptions/$(AZURE_SUBSCRIPTION_ID)/resourceGroups/$(AZURE_RESOURCE_GROUP)/providers/Microsoft.MachineLearningServices/workspaces/$(AZURE_ML_WORKSPACE)"
               
-              # Ensure Azure credentials are available to Python
-              # The AzureCLI@2 task logs in, but we need to make sure Python can access those credentials
-              export AZURE_CLIENT_ID=$(az account show --query user.name -o tsv 2>/dev/null || echo "")
+              # Ensure Azure credentials are available for MLflow azureml-mlflow plugin
+              # DefaultAzureCredential checks Azure CLI credentials first, so ensure they're available
+              # The AzureCLI@2 task logs in, and DefaultAzureCredential should pick it up
+              export AZURE_TENANT_ID=$(az account show --query tenantId -o tsv 2>/dev/null || echo "")
+              
               echo "🔍 Debug: MLFLOW_TRACKING_URI=$MLFLOW_TRACKING_URI"
               echo "🔍 Debug: AZURE_ML_REGION=$AZURE_ML_REGION"
               echo "🔍 Debug: AZURE_ML_WORKSPACE=$AZURE_ML_WORKSPACE"
               echo "🔍 Debug: Azure account=$(az account show --query name -o tsv 2>/dev/null || echo 'Not available')"
+              echo "🔍 Debug: Azure tenant=$(az account show --query tenantId -o tsv 2>/dev/null || echo 'Not available')"
+              echo "🔍 Debug: Checking Azure CLI login status..."
+              az account show > /dev/null 2>&1 && echo "✅ Azure CLI is logged in" || echo "⚠️ Azure CLI not logged in"
               
               cd mlops/training
               python train_nsfw_model.py
@@ -226,13 +231,16 @@ stages:
               export AZURE_ML_REGION="$(AZURE_ML_REGION)"
               export MLFLOW_TRACKING_URI="azureml://$(AZURE_ML_REGION).api.azureml.ms/mlflow/v1.0/subscriptions/$(AZURE_SUBSCRIPTION_ID)/resourceGroups/$(AZURE_RESOURCE_GROUP)/providers/Microsoft.MachineLearningServices/workspaces/$(AZURE_ML_WORKSPACE)"
               
-              # Ensure Azure credentials are available to Python
-              # The AzureCLI@2 task logs in, but we need to make sure Python can access those credentials
+              # Ensure Azure credentials are available for MLflow azureml-mlflow plugin
+              # The plugin uses DefaultAzureCredential which checks these environment variables
+              export AZURE_TENANT_ID=$(az account show --query tenantId -o tsv 2>/dev/null || echo "")
               export AZURE_CLIENT_ID=$(az account show --query user.name -o tsv 2>/dev/null || echo "")
+              
               echo "🔍 Debug: MLFLOW_TRACKING_URI=$MLFLOW_TRACKING_URI"
               echo "🔍 Debug: AZURE_ML_REGION=$AZURE_ML_REGION"
               echo "🔍 Debug: AZURE_ML_WORKSPACE=$AZURE_ML_WORKSPACE"
               echo "🔍 Debug: Azure account=$(az account show --query name -o tsv 2>/dev/null || echo 'Not available')"
+              echo "🔍 Debug: Azure tenant=$(az account show --query tenantId -o tsv 2>/dev/null || echo 'Not available')"
               
               cd mlops/training
               python train_violence_model.py
