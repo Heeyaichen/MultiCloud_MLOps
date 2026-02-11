@@ -73,6 +73,16 @@ def train_nsfw_model():
     
     # Keep azureml:// scheme - the azureml-mlflow plugin handles authentication automatically
     # The plugin should parse the URI correctly if the hostname uses region (eastus) not workspace name
+    # Ensure Azure credentials are available for MLflow
+    print("🔍 Setting up Azure authentication for MLflow...")
+    credential = DefaultAzureCredential()
+    # Test credential
+    try:
+        token = credential.get_token("https://management.azure.com/.default")
+        print(f"✅ Azure credential obtained successfully")
+    except Exception as e:
+        print(f"⚠️ Warning: Could not obtain Azure credential: {e}")
+    
     mlflow.set_tracking_uri(tracking_uri)
     
     # Verify the tracking URI was set correctly
@@ -236,6 +246,16 @@ def train_violence_model():
     
     # Keep azureml:// scheme - the azureml-mlflow plugin handles authentication automatically
     # The plugin should parse the URI correctly if the hostname uses region (eastus) not workspace name
+    # Ensure Azure credentials are available for MLflow
+    print("🔍 Setting up Azure authentication for MLflow...")
+    credential = DefaultAzureCredential()
+    # Test credential
+    try:
+        token = credential.get_token("https://management.azure.com/.default")
+        print(f"✅ Azure credential obtained successfully")
+    except Exception as e:
+        print(f"⚠️ Warning: Could not obtain Azure credential: {e}")
+    
     mlflow.set_tracking_uri(tracking_uri)
     
     # Verify the tracking URI was set correctly

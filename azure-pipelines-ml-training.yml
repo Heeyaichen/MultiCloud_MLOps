@@ -115,9 +115,13 @@ stages:
               export AZURE_ML_REGION="$(AZURE_ML_REGION)"
               export MLFLOW_TRACKING_URI="azureml://$(AZURE_ML_REGION).api.azureml.ms/mlflow/v1.0/subscriptions/$(AZURE_SUBSCRIPTION_ID)/resourceGroups/$(AZURE_RESOURCE_GROUP)/providers/Microsoft.MachineLearningServices/workspaces/$(AZURE_ML_WORKSPACE)"
               
+              # Ensure Azure credentials are available to Python
+              # The AzureCLI@2 task logs in, but we need to make sure Python can access those credentials
+              export AZURE_CLIENT_ID=$(az account show --query user.name -o tsv 2>/dev/null || echo "")
               echo "🔍 Debug: MLFLOW_TRACKING_URI=$MLFLOW_TRACKING_URI"
               echo "🔍 Debug: AZURE_ML_REGION=$AZURE_ML_REGION"
               echo "🔍 Debug: AZURE_ML_WORKSPACE=$AZURE_ML_WORKSPACE"
+              echo "🔍 Debug: Azure account=$(az account show --query name -o tsv 2>/dev/null || echo 'Not available')"
               
               cd mlops/training
               python train_nsfw_model.py
@@ -222,9 +226,13 @@ stages:
               export AZURE_ML_REGION="$(AZURE_ML_REGION)"
               export MLFLOW_TRACKING_URI="azureml://$(AZURE_ML_REGION).api.azureml.ms/mlflow/v1.0/subscriptions/$(AZURE_SUBSCRIPTION_ID)/resourceGroups/$(AZURE_RESOURCE_GROUP)/providers/Microsoft.MachineLearningServices/workspaces/$(AZURE_ML_WORKSPACE)"
               
+              # Ensure Azure credentials are available to Python
+              # The AzureCLI@2 task logs in, but we need to make sure Python can access those credentials
+              export AZURE_CLIENT_ID=$(az account show --query user.name -o tsv 2>/dev/null || echo "")
               echo "🔍 Debug: MLFLOW_TRACKING_URI=$MLFLOW_TRACKING_URI"
               echo "🔍 Debug: AZURE_ML_REGION=$AZURE_ML_REGION"
               echo "🔍 Debug: AZURE_ML_WORKSPACE=$AZURE_ML_WORKSPACE"
+              echo "🔍 Debug: Azure account=$(az account show --query name -o tsv 2>/dev/null || echo 'Not available')"
               
               cd mlops/training
               python train_violence_model.py
