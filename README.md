@@ -1,427 +1,691 @@
-# Guardian AI - Simplified MLOps Video Moderation System
+# Guardian AI - MLOps Project
 
-**Risk-Based, Near-Real-Time Video Moderation with Simplified Multi-Cloud MLOps**
+**End-to-End MLOps Pipeline for ML Model Training and Deployment on Azure**
+
+A production-ready MLOps project demonstrating automated machine learning workflows using Azure Machine Learning, Azure DevOps, and MLflow. This project implements a complete lifecycle from model training on compute clusters to automated deployment to online endpoints.
+
+---
 
 ## 🎯 Project Overview
 
-Enterprise-grade AI-assisted video moderation system with:
-- **Risk-adaptive processing** (0.5-1 FPS, not 30 FPS)
-- **CPU-first, GPU-on-demand** architecture
-- **Human-in-the-loop** review system
-- **Simplified multi-cloud** (AWS storage/queue/DB, Azure compute/ML)
-- **Complete MLOps lifecycle** (training, deployment, monitoring)
-- **50% cost reduction** vs original architecture
+This project provides a complete MLOps implementation featuring:
+
+- **Automated Model Training** - Azure ML compute cluster-based training with MLflow tracking
+- **Model Registry** - Centralized model versioning and management in Azure ML
+- **CI/CD Pipelines** - Azure DevOps pipelines for training and deployment automation
+- **Online Endpoint Deployment** - Automated deployment to Azure ML managed endpoints
+- **Multi-Model Support** - Training and deployment pipelines for multiple models (NSFW and Violence detection)
 
 ---
 
-## 📊 Simplified Architecture Highlights
+## 🏗️ Architecture
 
-### What's Included (Minimal Learning Setup)
-✅ **AWS Services (3)**:
-- S3 - Video storage
-- SQS - 2 queues (video-processing, gpu-processing)
-- DynamoDB - 2 tables (videos, events)
+### Multi-Cloud Architecture
 
-✅ **Azure Services (2-3)**:
-- AKS - Kubernetes cluster
-- ACR - Container registry
-- Azure ML - Model Registry (optional)
+This project implements a hybrid cloud architecture leveraging both AWS and Azure services:
 
-✅ **Microservices (6)**:
-- Ingestion, Fast Screening, Deep Vision, Policy Engine, Human Review, Notification
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Application Layer                            │
+│  (Microservices: Ingestion, Fast-Screening, Deep-Vision, etc.)      │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                    ┌─────────┴─────────┐
+                    │                   │
+            ┌───────▼───────┐   ┌───────▼───────┐
+            │   AWS Cloud   │   │  Azure Cloud   │
+            └───────┬───────┘   └───────┬───────┘
+                    │                   │
+        ┌───────────┼───────────┐       │
+        │           │           │       │
+    ┌───▼───┐  ┌───▼───┐  ┌───▼───┐     │
+    │  S3   │  │  SQS  │  │DynamoDB│    │
+    │Storage│  │Queues │  │Database│    │
+    └───────┘  └───────┘  └────────┘    │
+                                        │
+                     ┌──────────────────┼──────────────────┐
+                     │                  │                  │
+             ┌───────▼───────┐  ┌───────▼───────┐  ┌───────▼───────┐
+             │  Azure ML     │  │ Azure DevOps  │  │  Azure ML     │
+             │  Workspace    │  │   Pipelines   │  │  Endpoints    │
+             │               │  │               │  │               │
+             │ • Compute     │  │ • Training    │  │ • NSFW Model  │
+             │   Clusters    │  │ • Deployment  │  │ • Violence    │
+             │ • Model       │  │               │  │   Model       │
+             │   Registry    │  │               │  │               │
+             │ • MLflow      │  │               │  │               │
+             └───────────────┘  └───────────────┘  └───────────────┘
+```
 
-✅ **Open Source (3)**:
-- Redis (caching), KEDA (GPU autoscaling), Prometheus + Grafana (monitoring)
+### Service Integration Flow
 
-**Total: 9 core services** (down from 15+)
+1. **Data Storage & Messaging (AWS)** → Application services store videos and process messages
+2. **Model Training (Azure)** → Azure ML trains models on compute clusters
+3. **Model Deployment (Azure)** → Models deployed to Azure ML online endpoints
+4. **Model Integration** → Application services call Azure ML endpoints for inference
+5. **CI/CD (Azure DevOps)** → Automated pipelines orchestrate the entire workflow
 
-### What's Removed (Simplified for Learning)
-❌ Azure Front Door + CDN → Use NGINX Ingress
-❌ WAF + DDoS Protection → Use Kubernetes NetworkPolicies
-❌ API Management → Direct service communication
-❌ 2 extra SQS queues → Use direct HTTP calls
-❌ 2 extra DynamoDB tables → Consolidated into videos table
+### MLOps Workflow
 
-### Optional Features (Disabled by Default)
-⚠️ **Azure OpenAI** - Set `AZURE_OPENAI_ENABLED=true` to enable LLM features
-⚠️ **S3 Glacier Lifecycle** - Uncomment in setup-aws.sh for archiving
-⚠️ **Azure ML Advanced** - A/B testing, drift detection (document separately)
+1. **Code Commit** → Push to Azure DevOps repository
+2. **Training Pipeline** → Submits jobs to Azure ML compute cluster
+3. **Model Training** → Executes on compute cluster with MLflow tracking
+4. **Model Registration** → Automatically registers models in Azure ML Model Registry
+5. **Deployment Pipeline** → Deploys registered models to online endpoints
+6. **Endpoint Management** → Updates Kubernetes ConfigMaps with endpoint URLs
+7. **Application Integration** → Application services use Azure ML endpoints for inference
 
 ---
 
-## 💰 Cost Comparison
+## ☁️ Cloud Services & Resources
 
-### Original Architecture
-- AWS: ~$50-100/month (4 SQS + 4 DynamoDB + S3)
-- Azure: ~$200-400/month (AKS + ACR + Azure ML + OpenAI + Monitoring)
-- **Total: $250-500/month**
+### AWS Services
 
-### Simplified Architecture
-- AWS: ~$25-40/month (2 SQS + 2 DynamoDB + S3)
-- Azure: ~$100-150/month (AKS + ACR, minimal Azure ML)
-- **Total: $125-190/month**
+| Service | Purpose | Usage in Project |
+|---------|---------|------------------|
+| **S3 (Simple Storage Service)** | Object storage for video files | Primary storage for uploaded videos. Application services upload/download videos from S3 buckets. |
+| **SQS (Simple Queue Service)** | Message queuing for asynchronous processing | Two queues: `video-processing` (main queue) and `gpu-processing` (high-risk videos). Enables decoupled, scalable processing. |
+| **DynamoDB** | NoSQL database for metadata and events | Two tables: `guardian-videos` (video metadata, status, risk scores) and `guardian-events` (audit log with TTL). Single source of truth for application state. |
 
-**Savings: ~50-60% reduction**
+**AWS Integration Points:**
+- **Ingestion Service** → Uploads videos to S3, creates DynamoDB records
+- **Fast-Screening Service** → Reads from SQS, updates DynamoDB with risk scores
+- **Deep-Vision Service** → Downloads videos from S3, processes, updates DynamoDB
+- **Policy Engine** → Reads/writes video decisions to DynamoDB
+- **API Gateway** → Queries DynamoDB for video listings and status
 
-### Cost Breakdown (Monthly)
-| Component | Original | Simplified | Savings |
-|-----------|----------|------------|---------|
-| AWS SQS | $2-4 (4 queues) | $1-2 (2 queues) | 50% |
-| AWS DynamoDB | $20-40 (4 tables) | $10-20 (2 tables) | 50% |
-| AWS S3 | $5-10 | $5-10 | 0% |
-| Azure AKS | $150-250 | $100-150 | 33% |
-| Azure Monitoring | $20-50 | $0 (use Prometheus) | 100% |
-| Azure OpenAI | $20-100 | $0 (optional) | 100% |
-| **Total** | **$250-500** | **$125-190** | **~50%** |
+### Azure Services
+
+| Service | Purpose | Usage in Project |
+|---------|---------|------------------|
+| **Azure ML Workspace** | Centralized ML platform | Manages compute clusters, model registry, MLflow tracking, and online endpoints. Core MLOps infrastructure. |
+| **Azure ML Compute Clusters** | Scalable compute for training | CPU-based clusters (`cpu-training-cluster`) execute training jobs. Auto-scales based on workload. |
+| **Azure ML Model Registry** | Model versioning and management | Stores trained models (`nsfw-detector`, `violence-detector`) with versioning, metadata, and lineage tracking. |
+| **Azure ML Online Endpoints** | Real-time inference endpoints | Managed endpoints (`nsfw-detector-endpoint`, `violence-detector-endpoint`) serve model predictions via REST API. |
+| **Azure DevOps** | CI/CD and pipeline orchestration | Hosts training and deployment pipelines. Manages code repository, variable groups, and service connections. |
+| **Azure Container Registry (ACR)** | Container image storage | Stores Docker images for application services (used in Kubernetes deployments). |
+| **Azure Kubernetes Service (AKS)** | Container orchestration | Hosts application microservices and integrates with Azure ML endpoints via ConfigMaps. |
+| **Azure OpenAI** | LLM services (Optional) | Provides GPT-4o for human review copilot and policy interpretation. Disabled by default. |
+
+**Azure Integration Points:**
+- **Training Pipeline** → Submits jobs to Azure ML compute clusters
+- **Deployment Pipeline** → Deploys models from registry to online endpoints
+- **Deep-Vision Service** → Calls Azure ML endpoints (`NSFW_MODEL_ENDPOINT`, `VIOLENCE_MODEL_ENDPOINT`) for inference
+- **Kubernetes ConfigMap** → Stores Azure ML endpoint URLs and keys for application services
+- **Azure DevOps** → Orchestrates entire MLOps workflow
+
+### Service Relationships & Data Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Application Data Flow                         │
+└─────────────────────────────────────────────────────────────────┘
+
+1. Video Upload
+   └─> Ingestion Service → S3 (store video) + DynamoDB (create record)
+   
+2. Video Processing
+   └─> SQS Queue → Fast-Screening Service → DynamoDB (update risk_score)
+   
+3. High-Risk Processing
+   └─> SQS GPU Queue → Deep-Vision Service → Azure ML Endpoints (inference)
+       └─> DynamoDB (update with model predictions)
+       
+4. Decision Making
+   └─> Policy Engine → DynamoDB (read scores) → Decision → DynamoDB (write decision)
+   
+5. Human Review (if needed)
+   └─> Human-Review Service → DynamoDB (read/write review status)
+   
+6. Notifications
+   └─> Notification Service → DynamoDB Events Table (audit log)
+
+┌─────────────────────────────────────────────────────────────────┐
+│                    MLOps Pipeline Flow                           │
+└─────────────────────────────────────────────────────────────────┘
+
+1. Code Commit
+   └─> Azure DevOps Repository
+   
+2. Training Pipeline Trigger
+   └─> Azure DevOps Pipeline → Azure ML Compute Cluster
+       └─> Training Scripts → MLflow Tracking → Model Artifacts
+       
+3. Model Registration
+   └─> Azure ML Model Registry (automatic after training)
+   
+4. Deployment Pipeline Trigger
+   └─> Azure DevOps Pipeline → Azure ML Online Endpoints
+       └─> Model from Registry → Endpoint Deployment
+       
+5. Endpoint Integration
+   └─> Kubernetes ConfigMap Update → Application Services
+       └─> Deep-Vision Service uses endpoints for inference
+```
+
+### Cross-Cloud Integration
+
+**How AWS and Azure Work Together:**
+
+1. **Data Layer (AWS)**:
+   - Videos stored in S3
+   - Metadata and events in DynamoDB
+   - Message queues in SQS
+
+2. **ML Layer (Azure)**:
+   - Models trained on Azure ML compute clusters
+   - Models registered in Azure ML Model Registry
+   - Models deployed to Azure ML online endpoints
+
+3. **Integration Point**:
+   - Application services (running on Azure Kubernetes or locally) use AWS for data
+   - Application services call Azure ML endpoints for model inference
+   - Azure DevOps pipelines orchestrate model training and deployment
+   - Kubernetes ConfigMaps bridge Azure ML endpoints to application services
+
+**Benefits of Multi-Cloud Approach:**
+- **Cost Optimization**: AWS for storage/queues (lower cost), Azure for ML (better ML tools)
+- **Best-of-Breed**: Use each cloud's strengths
+- **Scalability**: Independent scaling of data and ML infrastructure
+- **Flexibility**: Can migrate components between clouds if needed
 
 ---
 
 ## 📋 Prerequisites
 
-### Required Accounts
-- AWS account (primary: S3, SQS, DynamoDB)
-- Azure subscription (for AKS deployment)
-- GitHub account (for CI/CD)
+### Required Accounts & Services
+
+**AWS Account:**
+- AWS account with IAM credentials
+- S3 bucket for video storage
+- SQS queues (`video-processing`, `gpu-processing`)
+- DynamoDB tables (`guardian-videos`, `guardian-events`)
+
+**Azure Subscription:**
+- Azure subscription with active subscription ID
+- Azure DevOps organization and project
+- Azure ML Workspace (`guardian-ai-ml-workspace-prod`)
+- Azure Resource Group (`guardian-ai-prod`)
+- Azure ML Compute Cluster (`cpu-training-cluster`)
+- Azure Container Registry (ACR) - for Kubernetes deployments
+- Azure Kubernetes Service (AKS) - optional, for production deployment
 
 ### Local Development Tools
+
 ```bash
 # Required
-- Docker Desktop 24+
-- kubectl 1.28+
-- Python 3.11+
-- AWS CLI 2.13+
+- Python 3.8+
 - Azure CLI 2.50+
+- AWS CLI 2.13+
+- Git
 
 # Optional
-- k9s (Kubernetes UI)
-- Lens (Kubernetes IDE)
+- Docker Desktop (for local testing)
+- kubectl (for Kubernetes integration)
+- Azure DevOps CLI
 ```
+
+### AWS Setup
+
+1. **Create AWS Resources**:
+   ```bash
+   # Run setup script
+   bash scripts/setup-aws.sh
+   
+   # This creates:
+   # - S3 bucket: guardian-videos-<account-id>
+   # - SQS queues: guardian-video-processing, guardian-gpu-processing
+   # - DynamoDB tables: guardian-videos, guardian-events
+   ```
+
+2. **Configure AWS Credentials**:
+   ```bash
+   aws configure
+   # Enter AWS Access Key ID, Secret Access Key, Region
+   ```
+
+3. **Get Resource Names**:
+   ```bash
+   export S3_BUCKET_NAME="guardian-videos-$(aws sts get-caller-identity --query Account --output text | cut -c1-8)"
+   export SQS_QUEUE_URL=$(aws sqs get-queue-url --queue-name guardian-video-processing --query 'QueueUrl' --output text)
+   export SQS_GPU_QUEUE_URL=$(aws sqs get-queue-url --queue-name guardian-gpu-processing --query 'QueueUrl' --output text)
+   ```
+
+### Azure DevOps Setup
+
+1. **Variable Group**: Create `guardian-variables` with:
+   - `AZURE_SUBSCRIPTION_ID`
+   - `AZURE_RESOURCE_GROUP` = `guardian-ai-prod`
+   - `AZURE_ML_WORKSPACE` = `guardian-ai-ml-workspace-prod`
+   - `AZURE_ML_REGION` = `eastus`
+   - `COMPUTE_CLUSTER` = `cpu-training-cluster`
+
+2. **Service Connection**: Create Azure Resource Manager service connection (`guardian-azure-connection`)
 
 ---
 
 ## 🚀 Quick Start
 
-### Option 1: Local Development (Recommended for Learning)
-```bash
-# 1. Clone repository
-git clone https://github.com/yourusername/guardian-ai.git
-cd guardian-ai
+### 1. Clone Repository
 
-# 2. Setup AWS resources (2 queues, 2 tables)
+```bash
+git clone <repository-url>
+cd MLOps_Project
+```
+
+### 2. Setup AWS Resources
+
+```bash
+# Configure AWS CLI
+aws configure
+
+# Create AWS resources (S3, SQS, DynamoDB)
 bash scripts/setup-aws.sh
 
-# 3. Configure environment
-cp .env.example .env
-# Edit .env with your AWS credentials
-
-# 4. Start all services
-docker-compose up --build
-
-# 5. Test
-curl http://localhost:8000/health
+# Verify resources created
+aws s3 ls | grep guardian-videos
+aws sqs list-queues | grep guardian
+aws dynamodb list-tables | grep guardian
 ```
 
-**Time**: ~30 minutes
-**Cost**: ~$10-25/month (AWS only)
+### 3. Setup Azure ML Workspace
 
-### Option 2: Cloud Deployment (Production)
 ```bash
-# 1. Setup AWS resources
-bash scripts/setup-aws.sh
+# Login to Azure
+az login
 
-# 2. Setup Azure AKS
-bash scripts/setup-aks.sh
+# Set environment variables
+export AZURE_SUBSCRIPTION_ID="your-subscription-id"
+export AZURE_RESOURCE_GROUP="guardian-ai-prod"
+export AZURE_ML_WORKSPACE="guardian-ai-ml-workspace-prod"
+export AZURE_ML_REGION="eastus"
 
-# 3. Build and push images
-bash scripts/build-services.sh
-
-# 4. Deploy to Kubernetes
-kubectl apply -f k8s/
-
-# 5. Verify deployment
-kubectl get pods -n production
+# Create compute cluster (if not exists)
+az ml compute create \
+  --name cpu-training-cluster \
+  --type amlcompute \
+  --min-instances 0 \
+  --max-instances 4 \
+  --vm-size Standard_DS3_v2 \
+  --workspace-name $AZURE_ML_WORKSPACE \
+  --resource-group $AZURE_RESOURCE_GROUP
 ```
 
-**Time**: ~2-3 hours
-**Cost**: ~$125-190/month
+### 4. Configure Azure DevOps
+
+1. Push code to Azure DevOps repository
+2. Create variable group `guardian-variables` with required variables
+3. Create service connection `guardian-azure-connection`
+4. Import pipelines:
+   - `azure-pipelines-ml-training.yml`
+   - `azure-pipelines-ml-deployment.yml`
+
+### 5. Run Training Pipeline
+
+1. Go to Azure DevOps → Pipelines
+2. Select `azure-pipelines-ml-training.yml`
+3. Click **Run pipeline**
+4. Monitor job execution in Azure ML Studio
+
+### 6. Deploy Models
+
+After training completes and models are registered:
+
+1. Go to Azure DevOps → Pipelines
+2. Select `azure-pipelines-ml-deployment.yml`
+3. Click **Run pipeline**
+4. Verify endpoints in Azure ML Studio → Endpoints
+
+### 7. Integrate Endpoints with Application
+
+After deployment, endpoints are automatically integrated:
+
+- **Kubernetes**: ConfigMap updated with endpoint URLs
+- **Local Development**: Set environment variables:
+  ```bash
+  export NSFW_MODEL_ENDPOINT="https://nsfw-detector-endpoint.eastus.inference.ml.azure.com/score"
+  export VIOLENCE_MODEL_ENDPOINT="https://violence-detector-endpoint.eastus.inference.ml.azure.com/score"
+  export MODEL_ENDPOINT_KEY="your-endpoint-key"
+  ```
 
 ---
 
-## 📖 Documentation
+## 📁 Project Structure
 
-### Getting Started
-- **[LOCAL_DEVELOPMENT_GUIDE.md](./LOCAL_DEVELOPMENT_GUIDE.md)** - Complete local setup guide (⭐ Start here!)
-- **[ARCHITECTURE_CORRECTED.md](./ARCHITECTURE_CORRECTED.md)** - Simplified architecture details
-- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - System architecture diagrams
-
-### Deployment & Operations
-- **[DEPLOYMENT_SUMMARY.md](./DEPLOYMENT_SUMMARY.md)** - Deployment instructions
-- **[PROJECT_STRUCTURE.md](./docs/PROJECT_STRUCTURE.md)** - Project organization
-
-### Optional Features
-- **[AZURE_OPENAI_INTEGRATION.md](./AZURE_OPENAI_INTEGRATION.md)** - Enable LLM features
-- **[AWS_MIGRATION_SUMMARY.md](./AWS_MIGRATION_SUMMARY.md)** - Multi-cloud strategy
-
----
-
-## 🏗️ Build Guide: 0 to Production
-
-### **Phase 1: Foundation Setup (30 minutes)**
-
-#### Step 1.1: Initialize Project
-```bash
-cd ~/Projects/MLOps_Project
-bash scripts/init-project.sh
 ```
-
-#### Step 1.2: Setup AWS Resources (Simplified)
-```bash
-bash scripts/setup-aws.sh
-# Creates: 1 S3 bucket, 2 SQS queues, 2 DynamoDB tables
-```
-
-#### Step 1.3: Configure Environment
-```bash
-# Create .env file with AWS credentials
-cat > .env <<EOF
-AWS_ACCESS_KEY_ID=your_key
-AWS_SECRET_ACCESS_KEY=your_secret
-AWS_REGION=ap-south-1
-S3_BUCKET_NAME=guardian-videos-xxxxxxxx
-SQS_QUEUE_URL=https://sqs.ap-south-1.amazonaws.com/...
-SQS_GPU_QUEUE_URL=https://sqs.ap-south-1.amazonaws.com/...
-DYNAMODB_VIDEOS_TABLE=guardian-videos
-DYNAMODB_EVENTS_TABLE=guardian-events
-EOF
-```
-
----
-
-### **Phase 2: Local Development (30 minutes)**
-
-#### Step 2.1: Start Services
-```bash
-docker-compose up --build
-```
-
-#### Step 2.2: Test Upload
-```bash
-curl -X POST http://localhost:8000/upload \
-  -F "file=@test-video.mp4"
-```
-
-#### Step 2.3: Verify Data
-```bash
-# Check DynamoDB
-aws dynamodb scan --table-name guardian-videos --limit 5
-
-# Check S3
-aws s3 ls s3://guardian-videos-xxxxxxxx/videos/
-
-# Check SQS
-aws sqs get-queue-attributes --queue-url $SQS_QUEUE_URL
+MLOps_Project/
+├── mlops/
+│   ├── training/
+│   │   ├── train_nsfw_model.py          # NSFW model training script
+│   │   ├── train_violence_model.py      # Violence model training script
+│   │   └── submit_training_job.py       # Job submission orchestrator
+│   └── deployment/
+│       ├── deploy_model.py               # Model deployment script
+│       └── rollback_model.py             # Model rollback utility
+├── azure-pipelines-ml-training.yml      # Training CI/CD pipeline
+├── azure-pipelines-ml-deployment.yml    # Deployment CI/CD pipeline
+├── docs/
+│   ├── COMPUTE_CLUSTER_WORKFLOW.md      # Complete workflow guide
+│   └── AZURE_DEVOPS_ML_INTEGRATION_GUIDE.md
+└── scripts/
+    ├── get-model-endpoints.sh            # Endpoint retrieval script
+    └── update-model-endpoints-in-k8s.sh # Kubernetes integration
 ```
 
 ---
 
-### **Phase 3: Cloud Deployment (Optional, 2-3 hours)**
+## 🔄 MLOps Workflow
 
-#### Step 3.1: Create AKS Cluster
-```bash
-bash scripts/setup-aks.sh
-```
+### Training Pipeline (`azure-pipelines-ml-training.yml`)
 
-#### Step 3.2: Build and Push Images
-```bash
-bash scripts/build-services.sh
-```
+**What it does:**
+- Submits training jobs to Azure ML compute cluster
+- Supports multiple model types (NSFW, Violence)
+- Automatically registers models in Azure ML Model Registry
+- Tracks training metrics with MLflow
 
-#### Step 3.3: Deploy Services
-```bash
-kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/configmap.yaml
-kubectl apply -f k8s/cpu-services/
-kubectl apply -f k8s/gpu-services/
-```
+**Pipeline Steps:**
+1. Setup Python environment
+2. Install Azure ML SDK dependencies
+3. Azure CLI authentication
+4. Submit NSFW training job to compute cluster
+5. Submit Violence training job to compute cluster
+6. Monitor job completion
 
-#### Step 3.4: Verify Deployment
+**Output:**
+- Registered models in Azure ML Model Registry
+- MLflow experiment runs with metrics
+- Model artifacts stored in Azure ML workspace
+
+### Deployment Pipeline (`azure-pipelines-ml-deployment.yml`)
+
+**What it does:**
+- Deploys registered models to Azure ML online endpoints
+- Creates managed endpoints with health probes
+- Updates Kubernetes ConfigMaps with endpoint URLs
+- Restarts application pods to use new endpoints
+
+**Pipeline Steps:**
+1. Install deployment dependencies
+2. Azure CLI authentication
+3. Deploy models to online endpoints
+4. Retrieve endpoint information
+5. Update Kubernetes ConfigMap
+6. Restart application deployments
+
+**Output:**
+- Online endpoints (`nsfw-detector-endpoint`, `violence-detector-endpoint`)
+- Scoring URIs for inference
+- Updated Kubernetes configuration
+
+---
+
+## 🧪 Model Training
+
+### Training Scripts
+
+**NSFW Detection Model** (`train_nsfw_model.py`)
+- PyTorch-based image classification model
+- ResNet50 backbone
+- MLflow tracking integration
+- Automatic model registration
+
+**Violence Detection Model** (`train_violence_model.py`)
+- Similar architecture to NSFW model
+- Separate training pipeline
+- Independent model registration
+
+### Training Configuration
+
+- **Framework**: PyTorch
+- **Compute**: Azure ML CPU compute cluster
+- **Tracking**: MLflow with Azure ML backend
+- **Registry**: Azure ML Model Registry
+- **Environment**: Curated PyTorch environment or custom
+
+### Running Training Locally (Optional)
+
 ```bash
-kubectl get pods -n production
-kubectl get svc -n production
+cd mlops/training
+
+# Set environment variables
+export AZURE_SUBSCRIPTION_ID="your-subscription-id"
+export AZURE_RESOURCE_GROUP="guardian-ai-prod"
+export AZURE_ML_WORKSPACE="guardian-ai-ml-workspace-prod"
+export AZURE_ML_REGION="eastus"
+export COMPUTE_CLUSTER="cpu-training-cluster"
+
+# Submit training job
+python submit_training_job.py \
+  --model-type nsfw \
+  --subscription-id $AZURE_SUBSCRIPTION_ID \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --workspace-name $AZURE_ML_WORKSPACE \
+  --compute-cluster $COMPUTE_CLUSTER
 ```
 
 ---
 
-## 🎯 SLOs & Performance Targets
+## 🚢 Model Deployment
 
-| Metric | Target | Measurement |
-|--------|--------|-------------|
-| P95 Processing Time (Low-Risk) | < 15s | Application logs |
-| P95 Processing Time (High-Risk) | < 60s | Application logs |
-| GPU Utilization | > 70% when active | Cluster metrics |
-| API Availability | 99.9% | Service health checks |
-| False Positive Rate | < 5% | Human review feedback |
-| Cost per 1000 videos | < $2.00 | AWS Cost Management |
+### Deployment Process
 
----
+1. **Retrieve Latest Model**: Gets latest version from Model Registry
+2. **Create Endpoint**: Creates or updates Azure ML online endpoint
+3. **Deploy Model**: Deploys model with health probes and scaling
+4. **Traffic Management**: Configures traffic split (champion/challenger)
+5. **Integration**: Updates Kubernetes ConfigMap with endpoint URLs
 
-## 🔧 Key Features
+### Endpoint Configuration
 
-### 1. Risk-Adaptive Processing
-- **0.5 FPS** for CPU screening (fast, cost-effective)
-- **1 FPS** for GPU analysis (balance accuracy and cost)
-- **80% of videos** skip GPU analysis (cost savings)
+- **Instance Type**: `Standard_DS3_v2`
+- **Instance Count**: 3 (champion), 1 (challenger if A/B testing enabled)
+- **Health Probes**: Liveness and readiness probes configured
+- **Scaling**: Manual scaling (can be configured for auto-scaling)
 
-### 2. GPU Scale-to-Zero
-- KEDA monitors queue depth
-- Scales from 0 → 5 replicas based on demand
-- **90% cost savings** during off-peak hours
+### Running Deployment Locally (Optional)
 
-### 3. Simplified Multi-Cloud
-- **AWS**: Storage, queues, database (S3, SQS, DynamoDB)
-- **Azure**: Compute, ML (AKS, ACR, Azure ML)
-- **Design**: Best-of-both-clouds, minimal services
-
-### 4. Human-in-the-Loop
-- Confidence score between 0.2 - 0.8 triggers review
-- 4-hour SLA for review completion
-- Optional AI copilot for reviewers
-
-### 5. Optional Azure OpenAI Integration
-- **Default**: Disabled (`AZURE_OPENAI_ENABLED=false`)
-- **Use Cases**: Human review copilot, policy interpretation
-- **Cost**: ~$0.01-0.02 per request
-- **Enable**: Set `AZURE_OPENAI_ENABLED=true` in .env
-
----
-
-## 📊 Data Flow
-
-```
-1. Upload Video → Ingestion Service
-   ↓
-2. Store in S3 + Create DynamoDB record
-   ↓
-3. Send to SQS (video-processing queue)
-   ↓
-4. Fast Screening (CPU) - 0.5 FPS
-   ↓
-5. If risk > 0.3 → Send to GPU queue
-   ↓
-6. Deep Vision (GPU) - 1 FPS (optional)
-   ↓
-7. Policy Engine - Make decision
-   ↓
-8. If score 0.2-0.8 → Human Review
-   ↓
-9. Notification Service - Send webhook
-```
-
----
-
-## 🧪 Testing
-
-### Unit Tests
 ```bash
-cd services/ingestion
-pytest tests/
-```
+cd mlops/deployment
 
-### Integration Tests
-```bash
-bash scripts/integration-test.sh
-```
+# Set environment variables
+export AZURE_SUBSCRIPTION_ID="your-subscription-id"
+export AZURE_RESOURCE_GROUP="guardian-ai-prod"
+export AZURE_ML_WORKSPACE="guardian-ai-ml-workspace-prod"
 
-### Load Testing
-```bash
-bash scripts/load-test.sh
+# Deploy all models
+python deploy_model.py
+
+# Deploy specific model
+python deploy_model.py --model-name nsfw-detector --version latest
 ```
 
 ---
 
-## 🔒 Security Best Practices
+## 📊 Monitoring & Verification
 
-1. **AWS Credentials**: Use IAM roles in production, never commit credentials
-2. **Secrets Management**: Use Kubernetes secrets for sensitive data
-3. **Network Policies**: Implement Kubernetes NetworkPolicies
-4. **HTTPS**: Use TLS/SSL for all external communication
-5. **API Authentication**: Implement API keys or OAuth2
+### Azure ML Studio
+
+**View Training Jobs:**
+1. Go to Azure ML Studio → Jobs
+2. Filter by experiment name (`nsfw-detection`, `violence-detection`)
+3. View metrics, logs, and artifacts
+
+**View Registered Models:**
+1. Go to Azure ML Studio → Models
+2. View `nsfw-detector` and `violence-detector` models
+3. Check model versions and metadata
+
+**View Endpoints:**
+1. Go to Azure ML Studio → Endpoints
+2. Check endpoint status (Healthy/Unhealthy)
+3. View scoring URIs and usage metrics
+
+### Get Endpoint Information
+
+```bash
+# Get NSFW endpoint scoring URI
+az ml online-endpoint show \
+  --name nsfw-detector-endpoint \
+  --resource-group guardian-ai-prod \
+  --workspace-name guardian-ai-ml-workspace-prod \
+  --query scoring_uri -o tsv
+
+# Get endpoint key
+az ml online-endpoint get-credentials \
+  --name nsfw-detector-endpoint \
+  --resource-group guardian-ai-prod \
+  --workspace-name guardian-ai-ml-workspace-prod \
+  --query primaryKey -o tsv
+```
 
 ---
 
-## 🆘 Troubleshooting
+## 🔧 Configuration
 
-### Issue: Services can't connect to AWS
+### Environment Variables
+
+**For MLOps (Training & Deployment):**
 ```bash
-# Verify AWS credentials
-aws sts get-caller-identity
-
-# Check environment variables
-docker-compose config | grep AWS
+# Azure ML Configuration
+AZURE_SUBSCRIPTION_ID="your-subscription-id"
+AZURE_RESOURCE_GROUP="guardian-ai-prod"
+AZURE_ML_WORKSPACE="guardian-ai-ml-workspace-prod"
+AZURE_ML_REGION="eastus"
+COMPUTE_CLUSTER="cpu-training-cluster"
+MLFLOW_TRACKING_URI="azureml://eastus.api.azureml.ms/mlflow/v1.0/..."
 ```
 
-### Issue: DynamoDB table not found
+**For Application Services:**
 ```bash
-# List tables
-aws dynamodb list-tables --region ap-south-1
+# AWS Configuration
+AWS_ACCESS_KEY_ID="your-aws-access-key"
+AWS_SECRET_ACCESS_KEY="your-aws-secret-key"
+AWS_REGION="us-east-1"
+S3_BUCKET_NAME="guardian-videos-xxxxxxxx"
+SQS_QUEUE_URL="https://sqs.us-east-1.amazonaws.com/.../guardian-video-processing"
+SQS_GPU_QUEUE_URL="https://sqs.us-east-1.amazonaws.com/.../guardian-gpu-processing"
+DYNAMODB_VIDEOS_TABLE="guardian-videos"
+DYNAMODB_EVENTS_TABLE="guardian-events"
 
-# Verify table exists
-aws dynamodb describe-table --table-name guardian-videos
+# Azure ML Endpoints (after deployment)
+NSFW_MODEL_ENDPOINT="https://nsfw-detector-endpoint.eastus.inference.ml.azure.com/score"
+VIOLENCE_MODEL_ENDPOINT="https://violence-detector-endpoint.eastus.inference.ml.azure.com/score"
+MODEL_ENDPOINT_KEY="your-endpoint-key"
+
+# Optional: Azure OpenAI (disabled by default)
+AZURE_OPENAI_ENABLED="false"
+AZURE_OPENAI_ENDPOINT="https://your-resource.openai.azure.com/"
+AZURE_OPENAI_API_KEY="your-api-key"
 ```
 
-### Issue: Docker Compose fails
-```bash
-# View logs
-docker-compose logs
+### Azure DevOps Variables
 
-# Rebuild
-docker-compose build --no-cache
-docker-compose up
+Configure in Variable Group `guardian-variables`:
+
+- `AZURE_SUBSCRIPTION_ID`
+- `AZURE_RESOURCE_GROUP`
+- `AZURE_ML_WORKSPACE`
+- `AZURE_ML_REGION`
+- `COMPUTE_CLUSTER`
+
+### Kubernetes ConfigMap
+
+For Kubernetes deployments, Azure ML endpoint URLs are stored in ConfigMap:
+
+```yaml
+# k8s/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: guardian-config
+data:
+  NSFW_MODEL_ENDPOINT: "https://nsfw-detector-endpoint.eastus.inference.ml.azure.com/score"
+  VIOLENCE_MODEL_ENDPOINT: "https://violence-detector-endpoint.eastus.inference.ml.azure.com/score"
+  MODEL_ENDPOINT_KEY: "your-endpoint-key"
 ```
-
-See [LOCAL_DEVELOPMENT_GUIDE.md](./LOCAL_DEVELOPMENT_GUIDE.md) for more troubleshooting tips.
 
 ---
 
-## 📚 Learning Path
+## 📚 Documentation
 
-### Beginner (Local Development)
-1. ✅ Setup AWS resources (S3, SQS, DynamoDB)
-2. ✅ Run services locally with docker-compose
-3. ✅ Test video upload and processing
-4. ✅ Understand data flow and architecture
+### Core Guides
 
-**Time**: 2-3 hours
-**Cost**: ~$10-25/month
+- **[COMPUTE_CLUSTER_WORKFLOW.md](./docs/COMPUTE_CLUSTER_WORKFLOW.md)** - Complete workflow from Git to deployment
+- **[AZURE_DEVOPS_ML_INTEGRATION_GUIDE.md](./docs/AZURE_DEVOPS_ML_INTEGRATION_GUIDE.md)** - Azure DevOps setup and configuration
 
-### Intermediate (Cloud Deployment)
-1. ⏳ Deploy to Azure AKS
-2. ⏳ Setup NGINX Ingress
-3. ⏳ Configure monitoring with Prometheus + Grafana
-4. ⏳ Implement CI/CD with GitHub Actions
+### Key Concepts
 
-**Time**: 1-2 days
-**Cost**: ~$125-190/month
-
-### Advanced (MLOps & Optimization)
-1. ⏳ Setup Azure ML for model training
-2. ⏳ Implement A/B testing
-3. ⏳ Add drift detection
-4. ⏳ Multi-region deployment
-5. ⏳ Advanced security (WAF, DDoS protection)
-
-**Time**: 1-2 weeks
-**Cost**: ~$250-500/month
+- **Compute Cluster Training**: Models train on Azure ML compute clusters, not on pipeline agents
+- **Automatic Model Registration**: Models are automatically registered after successful training
+- **MLflow Integration**: All training metrics tracked in MLflow with Azure ML backend
+- **Online Endpoints**: Models deployed as managed online endpoints for real-time inference
 
 ---
 
-## 🤝 Contributing
+## 🐛 Troubleshooting
 
-Contributions are welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
+### Training Pipeline Issues
+
+**Issue**: Compute cluster not found
+```bash
+# Verify cluster exists
+az ml compute show \
+  --name cpu-training-cluster \
+  --workspace-name guardian-ai-ml-workspace-prod \
+  --resource-group guardian-ai-prod
+```
+
+**Issue**: Model registration fails
+- Check training logs in Azure ML Studio → Jobs → Outputs + logs
+- Verify MLflow tracking URI is correctly configured
+- Ensure model artifacts are saved successfully
+
+### Deployment Pipeline Issues
+
+**Issue**: Endpoint creation fails
+```bash
+# Check endpoint status
+az ml online-endpoint show \
+  --name nsfw-detector-endpoint \
+  --resource-group guardian-ai-prod \
+  --workspace-name guardian-ai-ml-workspace-prod
+```
+
+**Issue**: Model not found in registry
+- Verify model is registered: Azure ML Studio → Models
+- Check model name matches exactly (case-sensitive)
+- Ensure training pipeline completed successfully
+
+---
+
+## ✅ Project Status
+
+**Current Implementation:**
+- ✅ Azure ML compute cluster training
+- ✅ Automated model registration
+- ✅ Azure DevOps CI/CD pipelines
+- ✅ Online endpoint deployment
+- ✅ MLflow tracking integration
+- ✅ Kubernetes integration (ConfigMap updates)
+
+**Production Ready:**
+- ✅ Complete MLOps lifecycle
+- ✅ Automated workflows
+- ✅ Model versioning and registry
+- ✅ Scalable compute infrastructure
+
+---
+
+## 🎓 Learning Outcomes
+
+This project demonstrates:
+
+- **MLOps Best Practices**: Complete lifecycle automation
+- **Azure ML Integration**: Compute clusters, model registry, endpoints
+- **CI/CD for ML**: Automated training and deployment pipelines
+- **MLflow Tracking**: Experiment tracking and model management
+- **Production Deployment**: Online endpoints with health monitoring
 
 ---
 
@@ -431,42 +695,6 @@ MIT License - See [LICENSE](./LICENSE) for details
 
 ---
 
-## 🙏 Acknowledgments
-
-- Built for learning purposes
-- Designed for cost-effectiveness
-- Optimized for simplicity
-
----
-
-## 📞 Support
-
-- **Documentation**: See [LOCAL_DEVELOPMENT_GUIDE.md](./LOCAL_DEVELOPMENT_GUIDE.md)
-- **Issues**: Open a GitHub issue
-- **Questions**: Check documentation first
-
----
-
-## 🎓 Educational Value
-
-This project teaches:
-- ✅ Multi-cloud architecture (AWS + Azure)
-- ✅ Microservices design patterns
-- ✅ Kubernetes deployment and scaling
-- ✅ MLOps lifecycle (training, deployment, monitoring)
-- ✅ Cost optimization strategies
-- ✅ Human-in-the-loop AI systems
-- ✅ Asynchronous processing with queues
-- ✅ Database design (NoSQL with DynamoDB)
-- ✅ Docker containerization
-- ✅ CI/CD with GitHub Actions
-
----
-
-**Status**: ✅ Simplified & Production Ready
-**Version**: 2.0 (Simplified)
-**Cost**: ~$125-190/month (50% reduction)
-**Services**: 9 core services (down from 15+)
-
-🚀 **Start learning MLOps today!**
-# MultiCloud_MLOps
+**Version**: 1.0  
+**Status**: Production Ready  
+**Last Updated**: February 2026
