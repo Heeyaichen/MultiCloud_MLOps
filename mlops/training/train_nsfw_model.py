@@ -40,10 +40,18 @@ def train_nsfw_model():
         workspace_name=os.getenv("AZURE_ML_WORKSPACE")
     )
     
-    # MLflow setup - use environment variable if set (from pipeline), otherwise get from MLClient
+    # MLflow setup - use environment variable if set (from pipeline), otherwise construct from MLClient
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
     if not tracking_uri:
-        tracking_uri = ml_client.workspaces.get(ml_client.workspace_name).mlflow_tracking_uri
+        # Get workspace details and construct tracking URI manually
+        workspace = ml_client.workspaces.get(ml_client.workspace_name)
+        region = workspace.location or "eastus"
+        subscription_id = ml_client.subscription_id
+        resource_group = ml_client.resource_group_name
+        workspace_name = ml_client.workspace_name
+        tracking_uri = f"azureml://{region}.api.azureml.ms/mlflow/v1.0/subscriptions/{subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.MachineLearningServices/workspaces/{workspace_name}"
+    
+    print(f"🔍 Using MLflow Tracking URI: {tracking_uri}")
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment("nsfw-detection")
     
@@ -157,10 +165,18 @@ def train_violence_model():
         workspace_name=os.getenv("AZURE_ML_WORKSPACE")
     )
     
-    # MLflow setup - use environment variable if set (from pipeline), otherwise get from MLClient
+    # MLflow setup - use environment variable if set (from pipeline), otherwise construct from MLClient
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
     if not tracking_uri:
-        tracking_uri = ml_client.workspaces.get(ml_client.workspace_name).mlflow_tracking_uri
+        # Get workspace details and construct tracking URI manually
+        workspace = ml_client.workspaces.get(ml_client.workspace_name)
+        region = workspace.location or "eastus"
+        subscription_id = ml_client.subscription_id
+        resource_group = ml_client.resource_group_name
+        workspace_name = ml_client.workspace_name
+        tracking_uri = f"azureml://{region}.api.azureml.ms/mlflow/v1.0/subscriptions/{subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.MachineLearningServices/workspaces/{workspace_name}"
+    
+    print(f"🔍 Using MLflow Tracking URI: {tracking_uri}")
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment("violence-detection")
     

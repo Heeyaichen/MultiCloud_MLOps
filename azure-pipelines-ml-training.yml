@@ -11,7 +11,9 @@ variables:
   - name: AZURE_RESOURCE_GROUP
     value: 'guardian-ai-prod'
   - name: AZURE_ML_WORKSPACE
-    value: 'guardian-ml-workspace-prod'
+    value: 'guardian-ai-ml-workspace-prod'
+  - name: AZURE_ML_REGION
+    value: 'eastus'
   - name: COMPUTE_CLUSTER
     value: 'cpu-training-cluster'
 
@@ -110,7 +112,12 @@ stages:
               export AZURE_SUBSCRIPTION_ID="$(AZURE_SUBSCRIPTION_ID)"
               export AZURE_RESOURCE_GROUP="$(AZURE_RESOURCE_GROUP)"
               export AZURE_ML_WORKSPACE="$(AZURE_ML_WORKSPACE)"
-              export MLFLOW_TRACKING_URI="azureml://$(AZURE_ML_WORKSPACE).api.azureml.ms/mlflow/v1.0/subscriptions/$(AZURE_SUBSCRIPTION_ID)/resourceGroups/$(AZURE_RESOURCE_GROUP)/providers/Microsoft.MachineLearningServices/workspaces/$(AZURE_ML_WORKSPACE)"
+              export AZURE_ML_REGION="$(AZURE_ML_REGION)"
+              export MLFLOW_TRACKING_URI="azureml://$(AZURE_ML_REGION).api.azureml.ms/mlflow/v1.0/subscriptions/$(AZURE_SUBSCRIPTION_ID)/resourceGroups/$(AZURE_RESOURCE_GROUP)/providers/Microsoft.MachineLearningServices/workspaces/$(AZURE_ML_WORKSPACE)"
+              
+              echo "🔍 Debug: MLFLOW_TRACKING_URI=$MLFLOW_TRACKING_URI"
+              echo "🔍 Debug: AZURE_ML_REGION=$AZURE_ML_REGION"
+              echo "🔍 Debug: AZURE_ML_WORKSPACE=$AZURE_ML_WORKSPACE"
               
               cd mlops/training
               python train_nsfw_model.py
@@ -211,7 +218,12 @@ stages:
               export AZURE_SUBSCRIPTION_ID="$(AZURE_SUBSCRIPTION_ID)"
               export AZURE_RESOURCE_GROUP="$(AZURE_RESOURCE_GROUP)"
               export AZURE_ML_WORKSPACE="$(AZURE_ML_WORKSPACE)"
-              export MLFLOW_TRACKING_URI="azureml://$(AZURE_ML_WORKSPACE).api.azureml.ms/mlflow/v1.0/subscriptions/$(AZURE_SUBSCRIPTION_ID)/resourceGroups/$(AZURE_RESOURCE_GROUP)/providers/Microsoft.MachineLearningServices/workspaces/$(AZURE_ML_WORKSPACE)"
+              export AZURE_ML_REGION="$(AZURE_ML_REGION)"
+              export MLFLOW_TRACKING_URI="azureml://$(AZURE_ML_REGION).api.azureml.ms/mlflow/v1.0/subscriptions/$(AZURE_SUBSCRIPTION_ID)/resourceGroups/$(AZURE_RESOURCE_GROUP)/providers/Microsoft.MachineLearningServices/workspaces/$(AZURE_ML_WORKSPACE)"
+              
+              echo "🔍 Debug: MLFLOW_TRACKING_URI=$MLFLOW_TRACKING_URI"
+              echo "🔍 Debug: AZURE_ML_REGION=$AZURE_ML_REGION"
+              echo "🔍 Debug: AZURE_ML_WORKSPACE=$AZURE_ML_WORKSPACE"
               
               cd mlops/training
               python train_violence_model.py
