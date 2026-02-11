@@ -126,6 +126,7 @@ stages:
               AZURE_SUBSCRIPTION_ID: $(AZURE_SUBSCRIPTION_ID)
               AZURE_RESOURCE_GROUP: $(AZURE_RESOURCE_GROUP)
               AZURE_ML_WORKSPACE: $(AZURE_ML_WORKSPACE)
+              AZURE_ML_REGION: $(AZURE_ML_REGION)
 
       - job: TrainViolenceModel
         displayName: 'Train Violence Detection Model'
@@ -232,3 +233,4 @@ stages:
               AZURE_SUBSCRIPTION_ID: $(AZURE_SUBSCRIPTION_ID)
               AZURE_RESOURCE_GROUP: $(AZURE_RESOURCE_GROUP)
               AZURE_ML_WORKSPACE: $(AZURE_ML_WORKSPACE)
+              AZURE_ML_REGION: $(AZURE_ML_REGION)
