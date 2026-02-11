@@ -82,7 +82,15 @@ def train_nsfw_model():
         print(f"✅ Azure credential obtained successfully")
     except Exception as e:
         print(f"⚠️ Warning: Could not obtain Azure credential: {e}")
+        print(f"   Error details: {str(e)}")
+        # Try to get token for MLflow endpoint specifically
+        try:
+            mlflow_token = credential.get_token("https://eastus.api.azureml.ms/.default")
+            print(f"✅ MLflow endpoint token obtained")
+        except Exception as e2:
+            print(f"⚠️ Could not get MLflow token: {e2}")
     
+    # Set tracking URI - the azureml-mlflow plugin should handle authentication
     mlflow.set_tracking_uri(tracking_uri)
     
     # Verify the tracking URI was set correctly
@@ -102,7 +110,14 @@ def train_nsfw_model():
         current_uri = mlflow.get_tracking_uri()
         print(f"🔍 Verified tracking URI after fix: {current_uri}")
     
-    mlflow.set_experiment("nsfw-detection")
+    # Try to set experiment - this will test if authentication works
+    try:
+        mlflow.set_experiment("nsfw-detection")
+    except Exception as e:
+        print(f"❌ Failed to set experiment: {e}")
+        print(f"   This might be an authentication issue.")
+        print(f"   Current tracking URI: {mlflow.get_tracking_uri()}")
+        raise
     
     with mlflow.start_run(run_name=f"nsfw-training-{datetime.now().strftime('%Y%m%d-%H%M%S')}"):
         
