@@ -197,11 +197,22 @@ def train_nsfw_model():
         
         # Save model
         print("💾 Saving model...")
-        mlflow.pytorch.log_model(
+        model_path = mlflow.pytorch.log_model(
             model,
-            "nsfw-detector",
-            registered_model_name="nsfw-detector"
+            "nsfw-detector"
         )
+        print(f"✅ Model logged to: {model_path}")
+        
+        # Register model separately (Azure ML MLflow may not support logged-models endpoint)
+        try:
+            mlflow.register_model(
+                model_path,
+                "nsfw-detector"
+            )
+            print("✅ Model registered successfully")
+        except Exception as e:
+            print(f"⚠️ Warning: Could not register model via MLflow: {e}")
+            print("   Model is logged but not registered. You can register it manually later.")
         
         # Log final metrics
         mlflow.log_metrics({
@@ -314,11 +325,22 @@ def train_violence_model():
                 "train_accuracy": accuracy
             }, step=epoch)
         
-        mlflow.pytorch.log_model(
+        model_path = mlflow.pytorch.log_model(
             model,
-            "violence-detector",
-            registered_model_name="violence-detector"
+            "violence-detector"
         )
+        print(f"✅ Model logged to: {model_path}")
+        
+        # Register model separately (Azure ML MLflow may not support logged-models endpoint)
+        try:
+            mlflow.register_model(
+                model_path,
+                "violence-detector"
+            )
+            print("✅ Model registered successfully")
+        except Exception as e:
+            print(f"⚠️ Warning: Could not register model via MLflow: {e}")
+            print("   Model is logged but not registered. You can register it manually later.")
         
         print(f"✅ Violence model trained! Final accuracy: {accuracy:.2%}")
 
