@@ -143,22 +143,25 @@ def submit_training_job(
     environment_param = env_object if env_object else base_env
     
     # Use command() function from azure.ai.ml (SDK v2 API)
+    # Note: command() returns a CommandJob object that can be configured
     command_job = command(
-        name=job_name,
-        display_name=f"{model_type.capitalize()} Model Training",
-        description=f"Train {model_type} detection model on Azure ML compute cluster",
         code=script_dir,  # Upload entire training directory
         command=install_cmd,
         environment=environment_param,  # Use environment object or string name
         compute=compute_cluster,
         environment_variables=env_vars,
-        experiment_name=experiment_name,
-        tags={
-            "model_type": model_type,
-            "training_type": "compute_cluster",
-            "framework": "pytorch"
-        }
     )
+    
+    # Set additional properties on the command job
+    command_job.name = job_name
+    command_job.display_name = f"{model_type.capitalize()} Model Training"
+    command_job.description = f"Train {model_type} detection model on Azure ML compute cluster"
+    command_job.experiment_name = experiment_name
+    command_job.tags = {
+        "model_type": model_type,
+        "training_type": "compute_cluster",
+        "framework": "pytorch"
+    }
     
     print(f"🚀 Submitting job to compute cluster '{compute_cluster}'...")
     print(f"   Job name: {job_name}")
