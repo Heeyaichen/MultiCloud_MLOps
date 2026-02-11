@@ -71,18 +71,8 @@ def train_nsfw_model():
     
     print(f"🔍 Final MLflow Tracking URI: {tracking_uri}")
     
-    # Convert azureml:// URI to HTTPS format to avoid azureml-mlflow plugin parsing issues
-    if tracking_uri.startswith("azureml://"):
-        # Extract components from azureml:// URI and convert to HTTPS
-        uri_parts = tracking_uri.replace("azureml://", "").split("/", 1)
-        if len(uri_parts) == 2:
-            hostname = uri_parts[0]
-            path = uri_parts[1]
-            # Convert to HTTPS URL format
-            https_uri = f"https://{hostname}/{path}"
-            print(f"🔍 Converting azureml:// URI to HTTPS format: {https_uri}")
-            tracking_uri = https_uri
-    
+    # Keep azureml:// scheme - the azureml-mlflow plugin handles authentication automatically
+    # The plugin should parse the URI correctly if the hostname uses region (eastus) not workspace name
     mlflow.set_tracking_uri(tracking_uri)
     
     # Verify the tracking URI was set correctly
@@ -95,7 +85,8 @@ def train_nsfw_model():
         if 'workspace' not in locals():
             workspace = ml_client.workspaces.get(ml_client.workspace_name)
         region = workspace.location if hasattr(workspace, 'location') and workspace.location else "eastus"
-        fixed_uri = current_uri.replace("guardian-ai-ml-workspace-prod.api.azureml.ms", f"{region}.api.azureml.ms")
+        # Reconstruct the correct azureml:// URI
+        fixed_uri = f"azureml://{region}.api.azureml.ms/mlflow/v1.0/subscriptions/{ml_client.subscription_id}/resourceGroups/{ml_client.resource_group_name}/providers/Microsoft.MachineLearningServices/workspaces/{ml_client.workspace_name}"
         mlflow.set_tracking_uri(fixed_uri)
         print(f"🔍 Re-set tracking URI to: {fixed_uri}")
         current_uri = mlflow.get_tracking_uri()
@@ -243,18 +234,8 @@ def train_violence_model():
     
     print(f"🔍 Final MLflow Tracking URI: {tracking_uri}")
     
-    # Convert azureml:// URI to HTTPS format to avoid azureml-mlflow plugin parsing issues
-    if tracking_uri.startswith("azureml://"):
-        # Extract components from azureml:// URI and convert to HTTPS
-        uri_parts = tracking_uri.replace("azureml://", "").split("/", 1)
-        if len(uri_parts) == 2:
-            hostname = uri_parts[0]
-            path = uri_parts[1]
-            # Convert to HTTPS URL format
-            https_uri = f"https://{hostname}/{path}"
-            print(f"🔍 Converting azureml:// URI to HTTPS format: {https_uri}")
-            tracking_uri = https_uri
-    
+    # Keep azureml:// scheme - the azureml-mlflow plugin handles authentication automatically
+    # The plugin should parse the URI correctly if the hostname uses region (eastus) not workspace name
     mlflow.set_tracking_uri(tracking_uri)
     
     # Verify the tracking URI was set correctly
@@ -267,7 +248,8 @@ def train_violence_model():
         if 'workspace' not in locals():
             workspace = ml_client.workspaces.get(ml_client.workspace_name)
         region = workspace.location if hasattr(workspace, 'location') and workspace.location else "eastus"
-        fixed_uri = current_uri.replace("guardian-ai-ml-workspace-prod.api.azureml.ms", f"{region}.api.azureml.ms")
+        # Reconstruct the correct azureml:// URI
+        fixed_uri = f"azureml://{region}.api.azureml.ms/mlflow/v1.0/subscriptions/{ml_client.subscription_id}/resourceGroups/{ml_client.resource_group_name}/providers/Microsoft.MachineLearningServices/workspaces/{ml_client.workspace_name}"
         mlflow.set_tracking_uri(fixed_uri)
         print(f"🔍 Re-set tracking URI to: {fixed_uri}")
         current_uri = mlflow.get_tracking_uri()
