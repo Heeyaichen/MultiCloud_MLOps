@@ -80,7 +80,7 @@ stages:
 
           - script: |
               python -m pip install --upgrade pip
-              pip install azure-ai-ml azure-identity mlflow azureml-mlflow torch torchvision transformers pillow numpy
+              pip install azure-ai-ml azure-identity
             displayName: 'Install dependencies'
 
           - task: AzureCLI@2
@@ -113,29 +113,28 @@ stages:
               export AZURE_RESOURCE_GROUP="$(AZURE_RESOURCE_GROUP)"
               export AZURE_ML_WORKSPACE="$(AZURE_ML_WORKSPACE)"
               export AZURE_ML_REGION="$(AZURE_ML_REGION)"
-              export MLFLOW_TRACKING_URI="azureml://$(AZURE_ML_REGION).api.azureml.ms/mlflow/v1.0/subscriptions/$(AZURE_SUBSCRIPTION_ID)/resourceGroups/$(AZURE_RESOURCE_GROUP)/providers/Microsoft.MachineLearningServices/workspaces/$(AZURE_ML_WORKSPACE)"
+              export COMPUTE_CLUSTER="$(COMPUTE_CLUSTER)"
               
-              # Ensure Azure credentials are available for MLflow azureml-mlflow plugin
-              # DefaultAzureCredential checks Azure CLI credentials first, so ensure they're available
-              # The AzureCLI@2 task logs in, and DefaultAzureCredential should pick it up
-              export AZURE_TENANT_ID=$(az account show --query tenantId -o tsv 2>/dev/null || echo "")
-              
-              echo "🔍 Debug: MLFLOW_TRACKING_URI=$MLFLOW_TRACKING_URI"
-              echo "🔍 Debug: AZURE_ML_REGION=$AZURE_ML_REGION"
-              echo "🔍 Debug: AZURE_ML_WORKSPACE=$AZURE_ML_WORKSPACE"
-              echo "🔍 Debug: Azure account=$(az account show --query name -o tsv 2>/dev/null || echo 'Not available')"
-              echo "🔍 Debug: Azure tenant=$(az account show --query tenantId -o tsv 2>/dev/null || echo 'Not available')"
-              echo "🔍 Debug: Checking Azure CLI login status..."
-              az account show > /dev/null 2>&1 && echo "✅ Azure CLI is logged in" || echo "⚠️ Azure CLI not logged in"
+              echo "🚀 Submitting NSFW training job to Azure ML compute cluster..."
+              echo "   Subscription ID: $AZURE_SUBSCRIPTION_ID"
+              echo "   Resource Group: $AZURE_RESOURCE_GROUP"
+              echo "   Workspace: $AZURE_ML_WORKSPACE"
+              echo "   Compute Cluster: $COMPUTE_CLUSTER"
               
               cd mlops/training
-              python train_nsfw_model.py
-            displayName: 'Train NSFW Model'
+              python submit_training_job.py \
+                --model-type nsfw \
+                --subscription-id "$AZURE_SUBSCRIPTION_ID" \
+                --resource-group "$AZURE_RESOURCE_GROUP" \
+                --workspace-name "$AZURE_ML_WORKSPACE" \
+                --compute-cluster "$COMPUTE_CLUSTER"
+            displayName: 'Submit NSFW Training Job to Compute Cluster'
             env:
               AZURE_SUBSCRIPTION_ID: $(AZURE_SUBSCRIPTION_ID)
               AZURE_RESOURCE_GROUP: $(AZURE_RESOURCE_GROUP)
               AZURE_ML_WORKSPACE: $(AZURE_ML_WORKSPACE)
               AZURE_ML_REGION: $(AZURE_ML_REGION)
+              COMPUTE_CLUSTER: $(COMPUTE_CLUSTER)
 
       - job: TrainViolenceModel
         displayName: 'Train Violence Detection Model'
@@ -196,7 +195,7 @@ stages:
 
           - script: |
               python -m pip install --upgrade pip
-              pip install azure-ai-ml azure-identity mlflow azureml-mlflow torch torchvision transformers pillow numpy
+              pip install azure-ai-ml azure-identity
             displayName: 'Install dependencies'
 
           - task: AzureCLI@2
@@ -229,24 +228,25 @@ stages:
               export AZURE_RESOURCE_GROUP="$(AZURE_RESOURCE_GROUP)"
               export AZURE_ML_WORKSPACE="$(AZURE_ML_WORKSPACE)"
               export AZURE_ML_REGION="$(AZURE_ML_REGION)"
-              export MLFLOW_TRACKING_URI="azureml://$(AZURE_ML_REGION).api.azureml.ms/mlflow/v1.0/subscriptions/$(AZURE_SUBSCRIPTION_ID)/resourceGroups/$(AZURE_RESOURCE_GROUP)/providers/Microsoft.MachineLearningServices/workspaces/$(AZURE_ML_WORKSPACE)"
+              export COMPUTE_CLUSTER="$(COMPUTE_CLUSTER)"
               
-              # Ensure Azure credentials are available for MLflow azureml-mlflow plugin
-              # The plugin uses DefaultAzureCredential which checks these environment variables
-              export AZURE_TENANT_ID=$(az account show --query tenantId -o tsv 2>/dev/null || echo "")
-              export AZURE_CLIENT_ID=$(az account show --query user.name -o tsv 2>/dev/null || echo "")
-              
-              echo "🔍 Debug: MLFLOW_TRACKING_URI=$MLFLOW_TRACKING_URI"
-              echo "🔍 Debug: AZURE_ML_REGION=$AZURE_ML_REGION"
-              echo "🔍 Debug: AZURE_ML_WORKSPACE=$AZURE_ML_WORKSPACE"
-              echo "🔍 Debug: Azure account=$(az account show --query name -o tsv 2>/dev/null || echo 'Not available')"
-              echo "🔍 Debug: Azure tenant=$(az account show --query tenantId -o tsv 2>/dev/null || echo 'Not available')"
+              echo "🚀 Submitting Violence training job to Azure ML compute cluster..."
+              echo "   Subscription ID: $AZURE_SUBSCRIPTION_ID"
+              echo "   Resource Group: $AZURE_RESOURCE_GROUP"
+              echo "   Workspace: $AZURE_ML_WORKSPACE"
+              echo "   Compute Cluster: $COMPUTE_CLUSTER"
               
               cd mlops/training
-              python train_violence_model.py
-            displayName: 'Train Violence Model'
+              python submit_training_job.py \
+                --model-type violence \
+                --subscription-id "$AZURE_SUBSCRIPTION_ID" \
+                --resource-group "$AZURE_RESOURCE_GROUP" \
+                --workspace-name "$AZURE_ML_WORKSPACE" \
+                --compute-cluster "$COMPUTE_CLUSTER"
+            displayName: 'Submit Violence Training Job to Compute Cluster'
             env:
               AZURE_SUBSCRIPTION_ID: $(AZURE_SUBSCRIPTION_ID)
               AZURE_RESOURCE_GROUP: $(AZURE_RESOURCE_GROUP)
               AZURE_ML_WORKSPACE: $(AZURE_ML_WORKSPACE)
               AZURE_ML_REGION: $(AZURE_ML_REGION)
+              COMPUTE_CLUSTER: $(COMPUTE_CLUSTER)
