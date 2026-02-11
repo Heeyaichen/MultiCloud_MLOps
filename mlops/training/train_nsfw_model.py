@@ -206,7 +206,8 @@ def train_nsfw_model():
             print(f"✅ Model logged to: {model_path}")
         except MlflowException as e:
             # Azure ML MLflow doesn't support logged-models endpoint, but model artifacts are still saved
-            if "logged-models" in str(e) or "404" in str(e) or "endpoint" in str(e).lower():
+            error_str = str(e)
+            if "logged-models" in error_str or "404" in error_str or "endpoint" in error_str.lower() or "/api/2.0/mlflow/logged-models" in error_str:
                 print(f"⚠️ Warning: MLflow logged-models endpoint not supported by Azure ML")
                 print(f"   Model artifacts are saved to run artifacts. Error: {e}")
                 # Get the model path from the run artifacts
@@ -214,16 +215,19 @@ def train_nsfw_model():
                 model_path = f"runs:/{run_id}/nsfw-detector"
                 print(f"   Model path: {model_path}")
             else:
+                print(f"❌ Unexpected MLflow error: {e}")
                 raise
         except Exception as e:
             # Catch any other exceptions
-            if "logged-models" in str(e) or "404" in str(e):
+            error_str = str(e)
+            if "logged-models" in error_str or "404" in error_str or "/api/2.0/mlflow/logged-models" in error_str:
                 print(f"⚠️ Warning: MLflow logged-models endpoint not supported by Azure ML")
                 print(f"   Model artifacts are saved to run artifacts. Error: {e}")
                 run_id = mlflow.active_run().info.run_id
                 model_path = f"runs:/{run_id}/nsfw-detector"
                 print(f"   Model path: {model_path}")
             else:
+                print(f"❌ Unexpected error: {e}")
                 raise
         
         # Register model separately (Azure ML MLflow may not support logged-models endpoint)
@@ -356,7 +360,8 @@ def train_violence_model():
             print(f"✅ Model logged to: {model_path}")
         except MlflowException as e:
             # Azure ML MLflow doesn't support logged-models endpoint, but model artifacts are still saved
-            if "logged-models" in str(e) or "404" in str(e) or "endpoint" in str(e).lower():
+            error_str = str(e)
+            if "logged-models" in error_str or "404" in error_str or "endpoint" in error_str.lower() or "/api/2.0/mlflow/logged-models" in error_str:
                 print(f"⚠️ Warning: MLflow logged-models endpoint not supported by Azure ML")
                 print(f"   Model artifacts are saved to run artifacts. Error: {e}")
                 # Get the model path from the run artifacts
@@ -364,16 +369,19 @@ def train_violence_model():
                 model_path = f"runs:/{run_id}/violence-detector"
                 print(f"   Model path: {model_path}")
             else:
+                print(f"❌ Unexpected MLflow error: {e}")
                 raise
         except Exception as e:
             # Catch any other exceptions
-            if "logged-models" in str(e) or "404" in str(e):
+            error_str = str(e)
+            if "logged-models" in error_str or "404" in error_str or "/api/2.0/mlflow/logged-models" in error_str:
                 print(f"⚠️ Warning: MLflow logged-models endpoint not supported by Azure ML")
                 print(f"   Model artifacts are saved to run artifacts. Error: {e}")
                 run_id = mlflow.active_run().info.run_id
                 model_path = f"runs:/{run_id}/violence-detector"
                 print(f"   Model path: {model_path}")
             else:
+                print(f"❌ Unexpected error: {e}")
                 raise
         
         # Register model separately (Azure ML MLflow may not support logged-models endpoint)
