@@ -1,9 +1,6 @@
 # Guardian AI - Complete End-to-End Deployment Guide
 
 **🎯 Goal**: Deploy the complete MLOps system to AWS + Azure cloud infrastructure
-
-**💰 Cost**: ~$125-190/month (simplified architecture)
-
 **⏱️ Time**: 4-6 hours (first-time deployment)
 
 ---
@@ -20,21 +17,81 @@ This guide walks you through deploying the complete Guardian AI MLOps platform f
 
 ---
 
+## 📋 Platform Notes
+
+**Important for Windows Users:**
+
+- **Default Commands**: All commands shown are for **Linux/macOS (bash)** by default
+- **Windows Options**:
+  - **Git Bash** (Recommended) - Runs bash commands directly, minimal changes needed
+  - **WSL2** (Windows Subsystem for Linux) - Full Linux environment, best compatibility
+  - **PowerShell** - See PowerShell alternatives provided for key sections below
+- **PowerShell Alternatives**: Provided for critical setup steps (environment variables, AWS/Azure config, file operations)
+- **Bash Scripts**: Scripts like `setup-aws.sh` require Git Bash or WSL2 on Windows
+
+**Command Mapping Reference:**
+
+| Operation | Linux/macOS (bash) | Windows (PowerShell) |
+|-----------|-------------------|---------------------|
+| Set environment variable | `export VAR=value` | `$env:VAR = "value"` |
+| Get environment variable | `echo $VAR` | `Write-Host $env:VAR` |
+| Command substitution | `$(command)` | `$(command)` |
+| String substring | `cut -c1-8` | `$var.Substring(0,8)` |
+| Timestamp | `date +%s` | `[DateTimeOffset]::Now.ToUnixTimeSeconds()` |
+| Python venv activate | `source venv/bin/activate` | `.\venv\Scripts\Activate.ps1` |
+| Create file with content | `cat > file <<EOF` | `@'...'@ | Out-File file` |
+| Home directory | `~/Projects` | `$env:USERPROFILE\Projects` |
+| Run bash script | `bash script.sh` | `bash script.sh` (Git Bash) or `wsl bash script.sh` |
+
+---
+
 ## Prerequisites
 
 ### Required Tools
+
+**All Platforms - Verify Installations:**
 ```bash
-# Verify installations
+# These commands work on Linux, macOS, Windows PowerShell, and Git Bash
 docker --version          # Docker Desktop 24+
 kubectl version --client  # kubectl 1.28+
-python3 --version        # Python 3.11+
+python --version          # Python 3.11+ (use 'python' on Windows, 'python3' on Linux/macOS)
 aws --version            # AWS CLI 2.13+
 az --version             # Azure CLI 2.50+
 helm version             # Helm 3.12+
 node --version           # Node.js 20+ (for frontend)
+```
 
-# Install missing tools (macOS):
+**Installation Instructions:**
+
+**Linux/macOS:**
+```bash
+# macOS (using Homebrew)
 brew install kubectl python@3.11 awscli azure-cli helm node
+
+# Linux (Ubuntu/Debian)
+sudo apt-get update
+sudo apt-get install -y kubectl python3.11 python3-pip awscli azure-cli helm nodejs npm
+
+# Linux (RHEL/CentOS)
+sudo yum install -y kubectl python3.11 python3-pip awscli azure-cli helm nodejs npm
+```
+
+**Windows:**
+```powershell
+# Using Chocolatey (recommended)
+choco install docker-desktop kubectl python311 awscli azure-cli kubernetes-helm nodejs
+
+# Or using winget
+winget install Docker.DockerDesktop
+winget install Kubernetes.kubectl
+winget install Python.Python.3.11
+winget install Amazon.AWSCLI
+winget install Microsoft.AzureCLI
+winget install Kubernetes.Helm
+winget install OpenJS.NodeJS
+
+# Install Git Bash (recommended for Windows users)
+winget install Git.Git
 ```
 
 ### Required Accounts
@@ -47,6 +104,8 @@ brew install kubectl python@3.11 awscli azure-cli helm node
 ## Phase 1: Project Setup & Initialization (30 minutes)
 
 ### Step 1.1: Clone/Initialize Project
+
+**Linux/macOS (bash):**
 ```bash
 # Navigate to project directory
 cd ~/Projects/MLOps_Project
@@ -67,7 +126,41 @@ source venv/bin/activate
 pip install fastapi uvicorn python-multipart boto3 botocore redis httpx openai
 ```
 
+**Windows (PowerShell):**
+```powershell
+# Navigate to project directory
+cd $env:USERPROFILE\Projects\MLOps_Project
+
+# Initialize git (if not already done)
+git init
+
+# Verify project structure
+Get-ChildItem services\
+Get-ChildItem k8s\
+Get-ChildItem scripts\
+
+# Create Python virtual environment
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+
+# Install common dependencies
+pip install fastapi uvicorn python-multipart boto3 botocore redis httpx openai
+```
+
+**Windows (Git Bash):**
+```bash
+# Same as Linux/macOS commands above
+cd ~/Projects/MLOps_Project
+git init
+ls -la services/
+python -m venv venv
+source venv/Scripts/activate  # Note: Scripts (capital S) on Windows
+pip install fastapi uvicorn python-multipart boto3 botocore redis httpx openai
+```
+
 ### Step 1.2: Verify Project Structure
+
+**Linux/macOS (bash):**
 ```bash
 # Ensure all required directories exist
 mkdir -p services/{ingestion,fast-screening,deep-vision,policy-engine,human-review,notification}
@@ -80,11 +173,31 @@ mkdir -p infrastructure
 echo "✅ Project structure verified"
 ```
 
+**Windows (PowerShell):**
+```powershell
+# Ensure all required directories exist
+New-Item -ItemType Directory -Force -Path services\ingestion,services\fast-screening,services\deep-vision,services\policy-engine,services\human-review,services\notification
+New-Item -ItemType Directory -Force -Path k8s\cpu-services,k8s\gpu-services,k8s\frontend
+New-Item -ItemType Directory -Force -Path scripts,mlops\training,mlops\deployment,tests\load,infrastructure
+
+Write-Host "✅ Project structure verified"
+```
+
+**Windows (Git Bash):**
+```bash
+# Same as Linux/macOS commands above
+mkdir -p services/{ingestion,fast-screening,deep-vision,policy-engine,human-review,notification}
+mkdir -p k8s/{cpu-services,gpu-services,frontend}
+mkdir -p scripts mlops/{training,deployment} tests/load infrastructure
+```
+
 ---
 
 ## Phase 2: AWS Infrastructure Setup (30 minutes)
 
 ### Step 2.1: Configure AWS Credentials
+
+**Linux/macOS (bash):**
 ```bash
 # Configure AWS CLI
 aws configure
@@ -105,7 +218,39 @@ echo "AWS Account ID: $AWS_ACCOUNT_ID"
 echo "AWS Region: $AWS_REGION"
 ```
 
+**Windows (PowerShell):**
+```powershell
+# Configure AWS CLI
+aws configure
+# Enter: AWS Access Key ID
+# Enter: AWS Secret Access Key
+# Enter: Default region (ap-south-1 recommended for cost)
+# Enter: Default output format (json)
+
+# Verify configuration
+aws sts get-caller-identity
+aws configure get region
+
+# Set environment variables for scripts
+$env:AWS_REGION = aws configure get region
+$env:AWS_ACCOUNT_ID = (aws sts get-caller-identity --query Account --output text)
+
+Write-Host "AWS Account ID: $env:AWS_ACCOUNT_ID"
+Write-Host "AWS Region: $env:AWS_REGION"
+```
+
+**Windows (Git Bash):**
+```bash
+# Same as Linux/macOS commands above
+aws configure
+aws sts get-caller-identity
+export AWS_REGION=$(aws configure get region)
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+```
+
 ### Step 2.2: Create AWS Resources (Simplified Architecture)
+
+**Linux/macOS (bash):**
 ```bash
 # Run AWS setup script (creates 1 S3 bucket, 2 SQS queues, 2 DynamoDB tables)
 bash scripts/setup-aws.sh
@@ -123,7 +268,33 @@ export S3_BUCKET_NAME="guardian-videos-$(echo $AWS_ACCOUNT_ID | cut -c1-8)"
 echo "✅ AWS resources created"
 ```
 
+**Windows (PowerShell):**
+```powershell
+# Run AWS setup script (requires Git Bash or WSL for bash scripts)
+# Option 1: Use Git Bash (recommended)
+bash scripts/setup-aws.sh
+
+# Option 2: Use WSL
+wsl bash scripts/setup-aws.sh
+
+# Save the bucket name (PowerShell syntax)
+$accountIdPrefix = $env:AWS_ACCOUNT_ID.Substring(0, 8)
+$env:S3_BUCKET_NAME = "guardian-videos-$accountIdPrefix"
+
+Write-Host "✅ AWS resources created"
+Write-Host "S3 Bucket: $env:S3_BUCKET_NAME"
+```
+
+**Windows (Git Bash):**
+```bash
+# Same as Linux/macOS commands above
+bash scripts/setup-aws.sh
+export S3_BUCKET_NAME="guardian-videos-$(echo $AWS_ACCOUNT_ID | cut -c1-8)"
+```
+
 ### Step 2.3: Get AWS Resource URLs
+
+**Linux/macOS (bash):**
 ```bash
 # Get SQS queue URLs
 export SQS_QUEUE_URL=$(aws sqs get-queue-url --queue-name guardian-video-processing --query 'QueueUrl' --output text)
@@ -144,7 +315,37 @@ aws dynamodb describe-table --table-name guardian-events --query 'Table.TableNam
 echo "✅ AWS resources verified"
 ```
 
+**Windows (PowerShell):**
+```powershell
+# Get SQS queue URLs
+$env:SQS_QUEUE_URL = aws sqs get-queue-url --queue-name guardian-video-processing --query 'QueueUrl' --output text
+$env:SQS_GPU_QUEUE_URL = aws sqs get-queue-url --queue-name guardian-gpu-processing --query 'QueueUrl' --output text
+
+# Verify resources exist
+Write-Host "S3 Bucket: $env:S3_BUCKET_NAME"
+Write-Host "SQS Main Queue: $env:SQS_QUEUE_URL"
+Write-Host "SQS GPU Queue: $env:SQS_GPU_QUEUE_URL"
+
+# Test S3 access
+aws s3 ls "s3://$env:S3_BUCKET_NAME"
+
+# Test DynamoDB access
+aws dynamodb describe-table --table-name guardian-videos --query 'Table.TableName'
+aws dynamodb describe-table --table-name guardian-events --query 'Table.TableName'
+
+Write-Host "✅ AWS resources verified"
+```
+
+**Windows (Git Bash):**
+```bash
+# Same as Linux/macOS commands above
+export SQS_QUEUE_URL=$(aws sqs get-queue-url --queue-name guardian-video-processing --query 'QueueUrl' --output text)
+export SQS_GPU_QUEUE_URL=$(aws sqs get-queue-url --queue-name guardian-gpu-processing --query 'QueueUrl' --output text)
+```
+
 ### Step 2.4: Create .env File for Local Testing
+
+**Linux/macOS (bash):**
 ```bash
 cat > .env <<EOF
 # AWS Configuration (Required)
@@ -174,11 +375,75 @@ EOF
 echo "✅ .env file created"
 ```
 
+**Windows (PowerShell):**
+```powershell
+# Create .env file using PowerShell here-string
+$envContent = @"
+# AWS Configuration (Required)
+AWS_ACCESS_KEY_ID=$(aws configure get aws_access_key_id)
+AWS_SECRET_ACCESS_KEY=$(aws configure get aws_secret_access_key)
+AWS_REGION=$env:AWS_REGION
+S3_BUCKET_NAME=$env:S3_BUCKET_NAME
+SQS_QUEUE_URL=$env:SQS_QUEUE_URL
+SQS_GPU_QUEUE_URL=$env:SQS_GPU_QUEUE_URL
+
+# DynamoDB Tables
+DYNAMODB_VIDEOS_TABLE=guardian-videos
+DYNAMODB_EVENTS_TABLE=guardian-events
+
+# Policy Engine Configuration
+AUTO_APPROVE_THRESHOLD=0.2
+AUTO_REJECT_THRESHOLD=0.8
+
+# Azure OpenAI (Optional - Configure in Phase 4 if needed)
+AZURE_OPENAI_ENABLED=false
+# AZURE_OPENAI_API_KEY=
+# AZURE_OPENAI_API_VERSION=2024-02-15-preview
+# AZURE_OPENAI_ENDPOINT=
+# AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o
+"@
+
+$envContent | Out-File -FilePath .env -Encoding utf8
+
+Write-Host "✅ .env file created"
+```
+
+**Windows (Git Bash):**
+```bash
+# Same as Linux/macOS commands above
+cat > .env <<EOF
+# AWS Configuration (Required)
+AWS_ACCESS_KEY_ID=$(aws configure get aws_access_key_id)
+AWS_SECRET_ACCESS_KEY=$(aws configure get aws_secret_access_key)
+AWS_REGION=$AWS_REGION
+S3_BUCKET_NAME=$S3_BUCKET_NAME
+SQS_QUEUE_URL=$SQS_QUEUE_URL
+SQS_GPU_QUEUE_URL=$SQS_GPU_QUEUE_URL
+
+# DynamoDB Tables
+DYNAMODB_VIDEOS_TABLE=guardian-videos
+DYNAMODB_EVENTS_TABLE=guardian-events
+
+# Policy Engine Configuration
+AUTO_APPROVE_THRESHOLD=0.2
+AUTO_REJECT_THRESHOLD=0.8
+
+# Azure OpenAI (Optional - Configure in Phase 4 if needed)
+AZURE_OPENAI_ENABLED=false
+# AZURE_OPENAI_API_KEY=
+# AZURE_OPENAI_API_VERSION=2024-02-15-preview
+# AZURE_OPENAI_ENDPOINT=
+# AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o
+EOF
+```
+
 ---
 
 ## Phase 3: Azure Infrastructure Setup (45 minutes)
 
 ### Step 3.1: Login to Azure
+
+**Linux/macOS (bash):**
 ```bash
 # Login to Azure
 az login
@@ -205,7 +470,48 @@ echo "ACR Name: $ACR_NAME"
 echo "AKS Cluster: $AKS_CLUSTER"
 ```
 
+**Windows (PowerShell):**
+```powershell
+# Login to Azure
+az login
+
+# List subscriptions
+az account list --output table
+
+# Set active subscription
+az account set --subscription "<YOUR_SUBSCRIPTION_ID>"
+
+# Verify
+az account show --output table
+
+# Set variables
+$env:RESOURCE_GROUP = "guardian-ai-prod"
+$env:LOCATION = "eastus"  # or swedencentral, westeurope
+$timestamp = [DateTimeOffset]::Now.ToUnixTimeSeconds()
+$env:ACR_NAME = "guardianacr$($timestamp.ToString().Substring(5, 5))"
+$env:AKS_CLUSTER = "guardian-ai-aks"
+
+Write-Host "Azure Subscription: $(az account show --query name -o tsv)"
+Write-Host "Resource Group: $env:RESOURCE_GROUP"
+Write-Host "Location: $env:LOCATION"
+Write-Host "ACR Name: $env:ACR_NAME"
+Write-Host "AKS Cluster: $env:AKS_CLUSTER"
+```
+
+**Windows (Git Bash):**
+```bash
+# Same as Linux/macOS commands above
+az login
+az account set --subscription "<YOUR_SUBSCRIPTION_ID>"
+export RESOURCE_GROUP="guardian-ai-prod"
+export LOCATION="eastus"
+export ACR_NAME="guardianacr$(date +%s | cut -c 6-10)"
+export AKS_CLUSTER="guardian-ai-aks"
+```
+
 ### Step 3.2: Create Azure Resource Group
+
+**Linux/macOS (bash):**
 ```bash
 # Create resource group
 az group create \
@@ -218,7 +524,29 @@ az group show --name $RESOURCE_GROUP --output table
 echo "✅ Resource group created"
 ```
 
+**Windows (PowerShell):**
+```powershell
+# Create resource group
+az group create `
+  --name $env:RESOURCE_GROUP `
+  --location $env:LOCATION
+
+# Verify
+az group show --name $env:RESOURCE_GROUP --output table
+
+Write-Host "✅ Resource group created"
+```
+
+**Windows (Git Bash):**
+```bash
+# Same as Linux/macOS commands above
+az group create --name $RESOURCE_GROUP --location $LOCATION
+az group show --name $RESOURCE_GROUP --output table
+```
+
 ### Step 3.3: Create Azure Container Registry (ACR)
+
+**Linux/macOS (bash):**
 ```bash
 # Create ACR
 az acr create \
@@ -246,6 +574,47 @@ az acr login --name $ACR_NAME
 ./scripts/update-acr-in-manifests.sh
 
 echo "✅ ACR created and logged in"
+```
+
+**Windows (PowerShell):**
+```powershell
+# Create ACR
+az acr create `
+  --resource-group $env:RESOURCE_GROUP `
+  --name $env:ACR_NAME `
+  --sku Standard `
+  --location $env:LOCATION
+
+# Enable admin access (for easier local testing)
+az acr update --name $env:ACR_NAME --admin-enabled true
+
+# Get ACR credentials
+$env:ACR_USERNAME = az acr credential show --name $env:ACR_NAME --query username -o tsv
+$env:ACR_PASSWORD = az acr credential show --name $env:ACR_NAME --query 'passwords[0].value' -o tsv
+$env:ACR_LOGIN_SERVER = az acr show --name $env:ACR_NAME --query loginServer -o tsv
+
+Write-Host "ACR Login Server: $env:ACR_LOGIN_SERVER"
+Write-Host "ACR Username: $env:ACR_USERNAME"
+
+# Login to ACR
+az acr login --name $env:ACR_NAME
+
+# Update all Kubernetes manifests to use this ACR (requires Git Bash or WSL for bash script)
+bash scripts/update-acr-in-manifests.sh
+
+Write-Host "✅ ACR created and logged in"
+```
+
+**Windows (Git Bash):**
+```bash
+# Same as Linux/macOS commands above
+az acr create --resource-group $RESOURCE_GROUP --name $ACR_NAME --sku Standard --location $LOCATION
+az acr update --name $ACR_NAME --admin-enabled true
+export ACR_USERNAME=$(az acr credential show --name $ACR_NAME --query username -o tsv)
+export ACR_PASSWORD=$(az acr credential show --name $ACR_NAME --query 'passwords[0].value' -o tsv)
+export ACR_LOGIN_SERVER=$(az acr show --name $ACR_NAME --query loginServer -o tsv)
+az acr login --name $ACR_NAME
+./scripts/update-acr-in-manifests.sh
 ```
 
 ### Step 3.4: Create AKS Cluster
@@ -349,7 +718,11 @@ kubectl wait --namespace ingress-nginx \
   --timeout=300s
 
 # Get external IP
+# Linux/macOS (bash):
 export EXTERNAL_IP=$(kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+# Windows (PowerShell):
+# $env:EXTERNAL_IP = kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
 
 echo "✅ NGINX Ingress installed"
 echo "External IP: $EXTERNAL_IP"
@@ -900,10 +1273,17 @@ az ml workspace show \
 ### Step 8.5.2: Train Models (Optional)
 ```bash
 # Set environment variables
+# Linux/macOS (bash):
 export AZURE_SUBSCRIPTION_ID="your-subscription-id"
 export AZURE_RESOURCE_GROUP="guardian-ai-prod"
 export AZURE_ML_WORKSPACE="guardian-ml-workspace"
 export MLFLOW_TRACKING_URI="azureml://your-workspace"
+
+# Windows (PowerShell):
+# $env:AZURE_SUBSCRIPTION_ID = "your-subscription-id"
+# $env:AZURE_RESOURCE_GROUP = "guardian-ai-prod"
+# $env:AZURE_ML_WORKSPACE = "guardian-ml-workspace"
+# $env:MLFLOW_TRACKING_URI = "azureml://your-workspace"
 
 # Train models
 cd mlops/training
