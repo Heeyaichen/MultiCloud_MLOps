@@ -41,8 +41,12 @@ def train_nsfw_model():
     )
     
     # MLflow setup - use environment variable if set (from pipeline), otherwise construct from MLClient
+    print("🔍 Step 1: Checking for MLFLOW_TRACKING_URI environment variable...")
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
+    print(f"🔍 MLFLOW_TRACKING_URI from env: {tracking_uri}")
+    
     if not tracking_uri:
+        print("🔍 Step 2: MLFLOW_TRACKING_URI not set, constructing from MLClient...")
         # Get workspace details and construct tracking URI manually
         workspace = ml_client.workspaces.get(ml_client.workspace_name)
         region = workspace.location or "eastus"
@@ -50,9 +54,28 @@ def train_nsfw_model():
         resource_group = ml_client.resource_group_name
         workspace_name = ml_client.workspace_name
         tracking_uri = f"azureml://{region}.api.azureml.ms/mlflow/v1.0/subscriptions/{subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.MachineLearningServices/workspaces/{workspace_name}"
+        print(f"🔍 Constructed tracking URI: {tracking_uri}")
+    else:
+        print(f"🔍 Using tracking URI from environment: {tracking_uri}")
     
-    print(f"🔍 Using MLflow Tracking URI: {tracking_uri}")
+    # Validate tracking URI format - fix if it uses workspace name in hostname
+    if "guardian-ai-ml-workspace-prod.api.azureml.ms" in tracking_uri:
+        print("⚠️ ERROR: Tracking URI still uses workspace name in hostname! Fixing...")
+        # Get workspace to extract region if not already available
+        if 'workspace' not in locals():
+            workspace = ml_client.workspaces.get(ml_client.workspace_name)
+        region = workspace.location if hasattr(workspace, 'location') and workspace.location else "eastus"
+        # Replace the incorrect hostname with region-based one
+        tracking_uri = tracking_uri.replace("guardian-ai-ml-workspace-prod.api.azureml.ms", f"{region}.api.azureml.ms")
+        print(f"🔍 Fixed tracking URI: {tracking_uri}")
+    
+    print(f"🔍 Final MLflow Tracking URI: {tracking_uri}")
     mlflow.set_tracking_uri(tracking_uri)
+    
+    # Verify the tracking URI was set correctly
+    current_uri = mlflow.get_tracking_uri()
+    print(f"🔍 MLflow current tracking URI: {current_uri}")
+    
     mlflow.set_experiment("nsfw-detection")
     
     with mlflow.start_run(run_name=f"nsfw-training-{datetime.now().strftime('%Y%m%d-%H%M%S')}"):
@@ -166,8 +189,12 @@ def train_violence_model():
     )
     
     # MLflow setup - use environment variable if set (from pipeline), otherwise construct from MLClient
+    print("🔍 Step 1: Checking for MLFLOW_TRACKING_URI environment variable...")
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
+    print(f"🔍 MLFLOW_TRACKING_URI from env: {tracking_uri}")
+    
     if not tracking_uri:
+        print("🔍 Step 2: MLFLOW_TRACKING_URI not set, constructing from MLClient...")
         # Get workspace details and construct tracking URI manually
         workspace = ml_client.workspaces.get(ml_client.workspace_name)
         region = workspace.location or "eastus"
@@ -175,9 +202,27 @@ def train_violence_model():
         resource_group = ml_client.resource_group_name
         workspace_name = ml_client.workspace_name
         tracking_uri = f"azureml://{region}.api.azureml.ms/mlflow/v1.0/subscriptions/{subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.MachineLearningServices/workspaces/{workspace_name}"
+        print(f"🔍 Constructed tracking URI: {tracking_uri}")
+    else:
+        print(f"🔍 Using tracking URI from environment: {tracking_uri}")
     
-    print(f"🔍 Using MLflow Tracking URI: {tracking_uri}")
+    # Validate tracking URI format - fix if it uses workspace name in hostname
+    if "guardian-ai-ml-workspace-prod.api.azureml.ms" in tracking_uri:
+        print("⚠️ ERROR: Tracking URI still uses workspace name in hostname! Fixing...")
+        # Get workspace to extract region
+        workspace = ml_client.workspaces.get(ml_client.workspace_name)
+        region = workspace.location or "eastus"
+        # Replace the incorrect hostname with region-based one
+        tracking_uri = tracking_uri.replace("guardian-ai-ml-workspace-prod.api.azureml.ms", f"{region}.api.azureml.ms")
+        print(f"🔍 Fixed tracking URI: {tracking_uri}")
+    
+    print(f"🔍 Final MLflow Tracking URI: {tracking_uri}")
     mlflow.set_tracking_uri(tracking_uri)
+    
+    # Verify the tracking URI was set correctly
+    current_uri = mlflow.get_tracking_uri()
+    print(f"🔍 MLflow current tracking URI: {current_uri}")
+    
     mlflow.set_experiment("violence-detection")
     
     with mlflow.start_run(run_name=f"violence-training-{datetime.now().strftime('%Y%m%d-%H%M%S')}"):
