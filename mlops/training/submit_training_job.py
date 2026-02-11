@@ -5,8 +5,8 @@ Submits training jobs to Azure ML compute cluster instead of running locally
 import os
 import sys
 import argparse
-from azure.ai.ml import MLClient
-from azure.ai.ml.entities import Command, Environment, CodeConfiguration
+from azure.ai.ml import MLClient, command
+from azure.ai.ml.entities import Environment, CodeConfiguration
 from azure.identity import DefaultAzureCredential
 from azure.ai.ml.constants import AssetTypes
 import time
@@ -113,12 +113,14 @@ def submit_training_job(
     
     # Try to use a PyTorch curated environment if available, otherwise fall back to base
     # You can customize this based on your workspace's available environments
+    env_object = None
     try:
         # Check if PyTorch environment exists
         pytorch_envs = [env for env in ml_client.environments.list() 
                        if "pytorch" in env.name.lower()]
         if pytorch_envs:
-            base_env = pytorch_envs[0].name
+            env_object = pytorch_envs[0]
+            base_env = env_object.name
             print(f"✅ Using PyTorch environment: {base_env}")
             # If using PyTorch env, we don't need to install torch/torchvision
             install_cmd = (
@@ -129,16 +131,25 @@ def submit_training_job(
             )
         else:
             print(f"⚠️ No PyTorch curated environment found, using base environment: {base_env}")
+            # Try to get the base environment object
+            try:
+                env_object = ml_client.environments.get(base_env, version="1")
+            except:
+                pass  # Will use string name if object not found
     except Exception as e:
         print(f"⚠️ Could not check for PyTorch environments, using base: {e}")
     
-    command_job = Command(
+    # Use environment object if available, otherwise use string name
+    environment_param = env_object if env_object else base_env
+    
+    # Use command() function from azure.ai.ml (SDK v2 API)
+    command_job = command(
         name=job_name,
         display_name=f"{model_type.capitalize()} Model Training",
         description=f"Train {model_type} detection model on Azure ML compute cluster",
         code=script_dir,  # Upload entire training directory
         command=install_cmd,
-        environment=base_env,
+        environment=environment_param,  # Use environment object or string name
         compute=compute_cluster,
         environment_variables=env_vars,
         experiment_name=experiment_name,
