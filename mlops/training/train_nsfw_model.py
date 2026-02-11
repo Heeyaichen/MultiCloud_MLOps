@@ -1,4 +1,5 @@
 import mlflow
+from mlflow.exceptions import MlflowException
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -197,11 +198,33 @@ def train_nsfw_model():
         
         # Save model
         print("💾 Saving model...")
-        model_path = mlflow.pytorch.log_model(
-            model,
-            "nsfw-detector"
-        )
-        print(f"✅ Model logged to: {model_path}")
+        try:
+            model_path = mlflow.pytorch.log_model(
+                model,
+                "nsfw-detector"
+            )
+            print(f"✅ Model logged to: {model_path}")
+        except MlflowException as e:
+            # Azure ML MLflow doesn't support logged-models endpoint, but model artifacts are still saved
+            if "logged-models" in str(e) or "404" in str(e) or "endpoint" in str(e).lower():
+                print(f"⚠️ Warning: MLflow logged-models endpoint not supported by Azure ML")
+                print(f"   Model artifacts are saved to run artifacts. Error: {e}")
+                # Get the model path from the run artifacts
+                run_id = mlflow.active_run().info.run_id
+                model_path = f"runs:/{run_id}/nsfw-detector"
+                print(f"   Model path: {model_path}")
+            else:
+                raise
+        except Exception as e:
+            # Catch any other exceptions
+            if "logged-models" in str(e) or "404" in str(e):
+                print(f"⚠️ Warning: MLflow logged-models endpoint not supported by Azure ML")
+                print(f"   Model artifacts are saved to run artifacts. Error: {e}")
+                run_id = mlflow.active_run().info.run_id
+                model_path = f"runs:/{run_id}/nsfw-detector"
+                print(f"   Model path: {model_path}")
+            else:
+                raise
         
         # Register model separately (Azure ML MLflow may not support logged-models endpoint)
         try:
@@ -325,11 +348,33 @@ def train_violence_model():
                 "train_accuracy": accuracy
             }, step=epoch)
         
-        model_path = mlflow.pytorch.log_model(
-            model,
-            "violence-detector"
-        )
-        print(f"✅ Model logged to: {model_path}")
+        try:
+            model_path = mlflow.pytorch.log_model(
+                model,
+                "violence-detector"
+            )
+            print(f"✅ Model logged to: {model_path}")
+        except MlflowException as e:
+            # Azure ML MLflow doesn't support logged-models endpoint, but model artifacts are still saved
+            if "logged-models" in str(e) or "404" in str(e) or "endpoint" in str(e).lower():
+                print(f"⚠️ Warning: MLflow logged-models endpoint not supported by Azure ML")
+                print(f"   Model artifacts are saved to run artifacts. Error: {e}")
+                # Get the model path from the run artifacts
+                run_id = mlflow.active_run().info.run_id
+                model_path = f"runs:/{run_id}/violence-detector"
+                print(f"   Model path: {model_path}")
+            else:
+                raise
+        except Exception as e:
+            # Catch any other exceptions
+            if "logged-models" in str(e) or "404" in str(e):
+                print(f"⚠️ Warning: MLflow logged-models endpoint not supported by Azure ML")
+                print(f"   Model artifacts are saved to run artifacts. Error: {e}")
+                run_id = mlflow.active_run().info.run_id
+                model_path = f"runs:/{run_id}/violence-detector"
+                print(f"   Model path: {model_path}")
+            else:
+                raise
         
         # Register model separately (Azure ML MLflow may not support logged-models endpoint)
         try:
