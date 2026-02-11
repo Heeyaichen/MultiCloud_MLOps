@@ -198,11 +198,22 @@ def train_nsfw_model():
         
         # Save model
         print("💾 Saving model...")
+        model_path = None
         try:
-            model_path = mlflow.pytorch.log_model(
+            model_info = mlflow.pytorch.log_model(
                 model,
                 "nsfw-detector"
             )
+            # Extract model_uri from ModelInfo object
+            if hasattr(model_info, 'model_uri'):
+                model_path = model_info.model_uri
+            elif hasattr(model_info, 'artifact_path'):
+                run_id = mlflow.active_run().info.run_id
+                model_path = f"runs:/{run_id}/{model_info.artifact_path}"
+            else:
+                # Fallback: construct from run_id
+                run_id = mlflow.active_run().info.run_id
+                model_path = f"runs:/{run_id}/nsfw-detector"
             print(f"✅ Model logged to: {model_path}")
         except MlflowException as e:
             # Azure ML MLflow doesn't support logged-models endpoint, but model artifacts are still saved
@@ -231,15 +242,16 @@ def train_nsfw_model():
                 raise
         
         # Register model separately (Azure ML MLflow may not support logged-models endpoint)
-        try:
-            mlflow.register_model(
-                model_path,
-                "nsfw-detector"
-            )
-            print("✅ Model registered successfully")
-        except Exception as e:
-            print(f"⚠️ Warning: Could not register model via MLflow: {e}")
-            print("   Model is logged but not registered. You can register it manually later.")
+        if model_path:
+            try:
+                mlflow.register_model(
+                    model_path,
+                    "nsfw-detector"
+                )
+                print("✅ Model registered successfully")
+            except Exception as e:
+                print(f"⚠️ Warning: Could not register model via MLflow: {e}")
+                print("   Model is logged but not registered. You can register it manually later.")
         
         # Log final metrics
         mlflow.log_metrics({
@@ -352,11 +364,22 @@ def train_violence_model():
                 "train_accuracy": accuracy
             }, step=epoch)
         
+        model_path = None
         try:
-            model_path = mlflow.pytorch.log_model(
+            model_info = mlflow.pytorch.log_model(
                 model,
                 "violence-detector"
             )
+            # Extract model_uri from ModelInfo object
+            if hasattr(model_info, 'model_uri'):
+                model_path = model_info.model_uri
+            elif hasattr(model_info, 'artifact_path'):
+                run_id = mlflow.active_run().info.run_id
+                model_path = f"runs:/{run_id}/{model_info.artifact_path}"
+            else:
+                # Fallback: construct from run_id
+                run_id = mlflow.active_run().info.run_id
+                model_path = f"runs:/{run_id}/violence-detector"
             print(f"✅ Model logged to: {model_path}")
         except MlflowException as e:
             # Azure ML MLflow doesn't support logged-models endpoint, but model artifacts are still saved
@@ -385,15 +408,16 @@ def train_violence_model():
                 raise
         
         # Register model separately (Azure ML MLflow may not support logged-models endpoint)
-        try:
-            mlflow.register_model(
-                model_path,
-                "violence-detector"
-            )
-            print("✅ Model registered successfully")
-        except Exception as e:
-            print(f"⚠️ Warning: Could not register model via MLflow: {e}")
-            print("   Model is logged but not registered. You can register it manually later.")
+        if model_path:
+            try:
+                mlflow.register_model(
+                    model_path,
+                    "violence-detector"
+                )
+                print("✅ Model registered successfully")
+            except Exception as e:
+                print(f"⚠️ Warning: Could not register model via MLflow: {e}")
+                print("   Model is logged but not registered. You can register it manually later.")
         
         print(f"✅ Violence model trained! Final accuracy: {accuracy:.2%}")
 
