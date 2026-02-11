@@ -26,7 +26,7 @@ This guide walks you through setting up:
 - ✅ Resource Group: `guardian-ai-prod`
 - ✅ AKS Cluster: `guardian-ai-aks` (or your cluster name)
 - ✅ ACR: `guardianacr58206` (or your ACR name)
-- ✅ Azure ML Workspace: `guardian-ml-workspace` (create if not exists)
+- ✅ Azure ML Workspace: `guardian-ml-workspace-prod` (create if not exists)
 
 ### Required Accounts & Permissions
 - Azure subscription with **Owner** or **Contributor** role
