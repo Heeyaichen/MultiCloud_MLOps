@@ -324,14 +324,14 @@ If any of these variables are missing, the pipeline will fail when it runs. Do n
 #### Step 2.1.1: Check if Workspace Exists
 1. Go to [Azure Portal](https://portal.azure.com)
 2. Search for **"Machine Learning"**
-3. Check if workspace `guardian-ml-workspace` exists in resource group `guardian-ai-prod`
+3. Check if workspace `guardian-ai-ml-workspace-prod` exists in resource group `guardian-ai-prod`
 
 #### Step 2.1.2: Create Workspace (if not exists)
 1. Click **"+ Create"**
 2. Fill in:
    - **Subscription**: Your subscription
    - **Resource group**: `guardian-ai-prod`
-   - **Workspace name**: `guardian-ml-workspace`
+   - **Workspace name**: `guardian-ai-ml-workspace-prod`
    - **Region**: Same as your AKS cluster
    - **Storage account**: Create new (auto-generated name)
    - **Key vault**: Create new (auto-generated name)
@@ -341,9 +341,9 @@ If any of these variables are missing, the pipeline will fail when it runs. Do n
 4. Wait for deployment (2-3 minutes)
 
 #### Step 2.1.3: Get Workspace Details
-1. Go to your workspace: `guardian-ml-workspace`
+1. Go to your workspace: `guardian-ai-ml-workspace-prod`
 2. Note down:
-   - **Workspace name**: `guardian-ml-workspace`
+   - **Workspace name**: `guardian-ai-ml-workspace-prod`
    - **Resource group**: `guardian-ai-prod`
    - **Subscription ID**: (from Overview page)
    - **MLflow tracking URI**: (from Overview → Properties, format: `azureml://eastus.api.azureml.ms/mlflow/v1.0/subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.MachineLearningServices/workspaces/<workspace>`)
@@ -658,21 +658,21 @@ echo "🔍 Getting Azure ML endpoint information..."
 NSFW_ENDPOINT=$(az ml online-endpoint show \
   --name nsfw-detector-endpoint \
   --resource-group guardian-ai-prod \
-  --workspace-name guardian-ml-workspace \
+  --workspace-name guardian-ai-ml-workspace-prod \
   --query scoring_uri -o tsv 2>/dev/null || echo "")
 
 # Get Violence endpoint
 VIOLENCE_ENDPOINT=$(az ml online-endpoint show \
   --name violence-detector-endpoint \
   --resource-group guardian-ai-prod \
-  --workspace-name guardian-ml-workspace \
+  --workspace-name guardian-ai-ml-workspace-prod \
   --query scoring_uri -o tsv 2>/dev/null || echo "")
 
 # Get endpoint key (same for both endpoints)
 ENDPOINT_KEY=$(az ml online-endpoint get-credentials \
   --name nsfw-detector-endpoint \
   --resource-group guardian-ai-prod \
-  --workspace-name guardian-ml-workspace \
+  --workspace-name guardian-ai-ml-workspace-prod \
   --query primaryKey -o tsv 2>/dev/null || echo "")
 
 if [ -z "$NSFW_ENDPOINT" ] || [ -z "$VIOLENCE_ENDPOINT" ]; then
@@ -785,7 +785,7 @@ kubectl logs -l app=deep-vision -n production --tail=20
 5. Test endpoint (optional):
    ```bash
    # Get endpoint URL and key
-   az ml online-endpoint show --name nsfw-detector-endpoint --resource-group guardian-ai-prod --workspace-name guardian-ml-workspace --query scoring_uri -o tsv
+   az ml online-endpoint show --name nsfw-detector-endpoint --resource-group guardian-ai-prod --workspace-name guardian-ai-ml-workspace-prod --query scoring_uri -o tsv
    
    # Test with curl (replace with actual values)
    curl -X POST <endpoint-url> \
@@ -895,7 +895,7 @@ Your `mlops/deployment/rollback_model.py` script is ready. You can trigger it ma
 
 #### Issue 5: Model Deployment Fails
 **Solution**:
-1. Verify model exists in registry: `az ml model list --workspace-name guardian-ml-workspace`
+1. Verify model exists in registry: `az ml model list --workspace-name guardian-ai-ml-workspace-prod`
 2. Check endpoint quota limits
 3. Verify compute instance type is available in your region
 
