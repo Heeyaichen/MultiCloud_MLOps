@@ -46,4 +46,4 @@ spec:
     app: policy-engine
   ports:
   - port: 80
-    targetPort: 8003
+    targetPort: 8000
