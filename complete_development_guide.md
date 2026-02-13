@@ -642,8 +642,7 @@ else
     --attach-acr $ACR_NAME \
     --generate-ssh-keys \
     --location $LOCATION \
-    --network-plugin azure \
-    --enable-addons monitoring
+    --network-plugin azure 
   
   echo "AKS cluster creation in progress (10-15 minutes)..."
   az aks wait --resource-group $RESOURCE_GROUP --name $AKS_CLUSTER --created
