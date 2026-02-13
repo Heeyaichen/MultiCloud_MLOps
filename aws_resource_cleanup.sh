@@ -208,16 +208,42 @@ if aws s3api head-bucket --bucket "$PRIMARY_BUCKET" --region "$REGION" 2>/dev/nu
     # This command handles empty buckets, versioned buckets, and non-empty buckets
     print_info "Deleting S3 bucket: $PRIMARY_BUCKET"
     
-    if aws s3 rb "s3://${PRIMARY_BUCKET}" --force --region "$REGION" 2>/dev/null; then
+    # First, verify bucket is actually empty
+    print_info "Verifying bucket is empty..."
+    REMAINING_OBJECTS=$(aws s3api list-objects-v2 --bucket "$PRIMARY_BUCKET" --region "$REGION" --max-items 1 --query 'Contents | length(@)' --output text 2>/dev/null || echo "0")
+    REMAINING_VERSIONS=$(aws s3api list-object-versions --bucket "$PRIMARY_BUCKET" --region "$REGION" --max-items 1 --query 'Versions | length(@)' --output text 2>/dev/null || echo "0")
+    REMAINING_DELETE_MARKERS=$(aws s3api list-object-versions --bucket "$PRIMARY_BUCKET" --region "$REGION" --max-items 1 --query 'DeleteMarkers | length(@)' --output text 2>/dev/null || echo "0")
+    
+    if [ "$REMAINING_OBJECTS" != "0" ] || [ "$REMAINING_VERSIONS" != "0" ] || [ "$REMAINING_DELETE_MARKERS" != "0" ]; then
+        print_warning "Bucket still contains items. Attempting final cleanup..."
+        aws s3 rm "s3://${PRIMARY_BUCKET}" --recursive --region "$REGION" 2>&1 | head -20 || true
+        sleep 2
+    fi
+    
+    # Try to delete the bucket (show errors this time)
+    print_info "Attempting bucket deletion..."
+    DELETE_OUTPUT=$(aws s3 rb "s3://${PRIMARY_BUCKET}" --force --region "$REGION" 2>&1)
+    DELETE_EXIT_CODE=$?
+    
+    if [ $DELETE_EXIT_CODE -eq 0 ]; then
         print_success "S3 bucket deleted: $PRIMARY_BUCKET"
     else
         print_error "Could not delete bucket: $PRIMARY_BUCKET"
-        print_warning "Bucket may still contain objects or versions."
-        print_info "Try manually: aws s3 rb s3://${PRIMARY_BUCKET} --force"
-        print_info "Or delete remaining objects/versions in AWS Console first."
+        echo "Error output: $DELETE_OUTPUT"
+        echo ""
+        print_warning "Manual deletion required. Run these commands:"
+        echo ""
+        echo "  # Check what's still in the bucket:"
+        echo "  aws s3api list-object-versions --bucket $PRIMARY_BUCKET --region $REGION"
+        echo ""
+        echo "  # Delete all remaining objects/versions:"
+        echo "  aws s3 rm s3://$PRIMARY_BUCKET --recursive --region $REGION"
+        echo ""
+        echo "  # Then delete the bucket:"
+        echo "  aws s3 rb s3://$PRIMARY_BUCKET --force --region $REGION"
+        echo ""
+        print_info "Or delete the bucket manually in AWS Console."
     fi
-    
-    print_success "S3 bucket deleted: $PRIMARY_BUCKET"
 else
     print_info "S3 bucket not found: $PRIMARY_BUCKET (skipping)"
 fi
