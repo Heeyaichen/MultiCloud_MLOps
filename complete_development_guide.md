@@ -912,7 +912,7 @@ data:
   # Service URLs (for direct HTTP calls)
   NOTIFICATION_SERVICE_URL: "http://notification:8005"
   HUMAN_REVIEW_SERVICE_URL: "http://human-review:8004"
-  POLICY_ENGINE_SERVICE_URL: "http://policy-engine:8003"
+  POLICY_ENGINE_SERVICE_URL: "http://policy-engine-service:80"
 EOF
 
 echo "✅ ConfigMap updated with AWS values"
