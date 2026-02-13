@@ -4,7 +4,7 @@ set -e
 echo "Setting up MLOps Platform..."
 
 RESOURCE_GROUP="rg-guardian-ai-prod"
-WORKSPACE_NAME="guardian-ml-workspace"
+WORKSPACE_NAME="guardian-ai-ml-workspace-prod"
 LOCATION="eastus"
 
 az ml workspace create \

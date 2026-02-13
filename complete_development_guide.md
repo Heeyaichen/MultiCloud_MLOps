@@ -1366,6 +1366,785 @@ python mlops/deployment/rollback_model.py violence-detector
 
 ---
 
+## Phase 8.6: Post-Deployment Testing After ML Pipeline (45 minutes)
+
+### Overview
+
+This phase provides a comprehensive, step-by-step guide for verifying and testing your ML model deployment after running the `azure-pipelines-ml-deployment.yml` pipeline. This is **critical for learners** to understand the complete end-to-end workflow and ensure models are properly integrated into production.
+
+**Prerequisites:**
+- ✅ `azure-pipelines-ml-training.yml` pipeline completed successfully
+- ✅ Models registered in Azure ML Model Registry
+- ✅ `azure-pipelines-ml-deployment.yml` pipeline completed successfully
+
+---
+
+### Phase 1: Understanding What Happens During Deployment Pipeline
+
+When `azure-pipelines-ml-deployment.yml` runs successfully, it performs the following actions:
+
+#### 1.1: Deploys Models to Azure ML Online Endpoints
+- Creates/updates `nsfw-detector-endpoint` (3 instances, Standard_DS3_v2)
+- Creates/updates `violence-detector-endpoint` (3 instances, Standard_DS3_v2)
+- Each endpoint becomes accessible via REST API with authentication
+
+#### 1.2: Updates Kubernetes ConfigMap
+- Retrieves endpoint URLs (`scoring_uri`) from Azure ML
+- Retrieves endpoint authentication keys (`primaryKey`)
+- Updates `k8s/configmap.yaml` with:
+  - `NSFW_MODEL_ENDPOINT`: Full HTTPS URL to NSFW model endpoint
+  - `VIOLENCE_MODEL_ENDPOINT`: Full HTTPS URL to violence model endpoint
+  - `MODEL_ENDPOINT_KEY`: Authentication key for both endpoints
+
+#### 1.3: Restarts Deep Vision Pods
+- Applies updated ConfigMap to Kubernetes cluster
+- Restarts `deep-vision` deployment to pick up new endpoint URLs
+- Pods restart and load new environment variables
+
+**Expected Pipeline Output:**
+```
+✅ Models deployed successfully
+✅ ConfigMap updated with endpoint URLs
+✅ deep-vision pods restarted
+```
+
+---
+
+### Phase 2: Verification & Testing (Required Steps)
+
+#### Step 2.1: Verify Endpoints Are Deployed
+
+**Linux/macOS (bash):**
+```bash
+# Set variables (if not already set)
+export AZURE_RESOURCE_GROUP="guardian-ai-prod"
+export AZURE_ML_WORKSPACE="guardian-ai-ml-workspace-prod"
+
+# Check endpoints in Azure ML Studio
+az ml online-endpoint list \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --workspace-name $AZURE_ML_WORKSPACE \
+  --output table
+
+# Expected output:
+# NAME                        STATE    LOCATION    TARGET    MIR_MODE
+# nsfw-detector-endpoint      Succeeded  eastus    3          None
+# violence-detector-endpoint  Succeeded  eastus    3          None
+
+# Check endpoint health (NSFW)
+az ml online-endpoint show \
+  --name nsfw-detector-endpoint \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --workspace-name $AZURE_ML_WORKSPACE \
+  --query "provisioning_state"
+
+# Expected: "Succeeded"
+
+# Check endpoint health (Violence)
+az ml online-endpoint show \
+  --name violence-detector-endpoint \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --workspace-name $AZURE_ML_WORKSPACE \
+  --query "provisioning_state"
+
+# Expected: "Succeeded"
+
+echo "✅ Endpoints verified"
+```
+
+**Windows (PowerShell):**
+```powershell
+# Set variables
+$env:AZURE_RESOURCE_GROUP = "guardian-ai-prod"
+$env:AZURE_ML_WORKSPACE = "guardian-ai-ml-workspace-prod"
+
+# Check endpoints
+az ml online-endpoint list `
+  --resource-group $env:AZURE_RESOURCE_GROUP `
+  --workspace-name $env:AZURE_ML_WORKSPACE `
+  --output table
+
+# Check endpoint health
+az ml online-endpoint show `
+  --name nsfw-detector-endpoint `
+  --resource-group $env:AZURE_RESOURCE_GROUP `
+  --workspace-name $env:AZURE_ML_WORKSPACE `
+  --query "provisioning_state"
+
+Write-Host "✅ Endpoints verified"
+```
+
+**Windows (Git Bash):**
+```bash
+# Same as Linux/macOS commands above
+export AZURE_RESOURCE_GROUP="guardian-ai-prod"
+export AZURE_ML_WORKSPACE="guardian-ai-ml-workspace-prod"
+az ml online-endpoint list --resource-group $AZURE_RESOURCE_GROUP --workspace-name $AZURE_ML_WORKSPACE --output table
+```
+
+#### Step 2.2: Verify ConfigMap Updated
+
+**Linux/macOS (bash):**
+```bash
+# Check ConfigMap has endpoint URLs
+kubectl get configmap guardian-config -n production -o yaml | grep -i "MODEL_ENDPOINT"
+
+# Expected output:
+#   NSFW_MODEL_ENDPOINT: https://xxx.azureml.net/v1/score
+#   VIOLENCE_MODEL_ENDPOINT: https://xxx.azureml.net/v1/score
+#   MODEL_ENDPOINT_KEY: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+# Verify deep-vision pods restarted
+kubectl get pods -n production -l app=deep-vision
+
+# Expected: Pods should show recent restart time (AGE should be recent)
+# Example:
+# NAME                          READY   STATUS    RESTARTS   AGE
+# deep-vision-74b6f9cf8f-rpjhk  1/1     Running   0          2m
+
+# Check pod logs for endpoint usage
+kubectl logs -l app=deep-vision -n production --tail=50 | grep -i "endpoint\|model"
+
+# Expected logs (if endpoints are configured):
+# - "Using custom model endpoints"
+# - "NSFW endpoint: https://..."
+# - "Violence endpoint: https://..."
+
+# OR (if endpoints not accessible, fallback):
+# - "Model endpoint error: ..."
+# - "Falling back to CLIP-only detection"
+
+echo "✅ ConfigMap and pods verified"
+```
+
+**Windows (PowerShell):**
+```powershell
+# Check ConfigMap
+kubectl get configmap guardian-config -n production -o yaml | Select-String -Pattern "MODEL_ENDPOINT"
+
+# Verify pods
+kubectl get pods -n production -l app=deep-vision
+
+# Check logs
+kubectl logs -l app=deep-vision -n production --tail=50 | Select-String -Pattern "endpoint|model"
+
+Write-Host "✅ ConfigMap and pods verified"
+```
+
+**Windows (Git Bash):**
+```bash
+# Same as Linux/macOS commands above
+kubectl get configmap guardian-config -n production -o yaml | grep -i "MODEL_ENDPOINT"
+kubectl get pods -n production -l app=deep-vision
+```
+
+#### Step 2.3: Test Model Endpoints Directly (Optional but Recommended)
+
+**Linux/macOS (bash):**
+```bash
+# Get endpoint URL and key for NSFW model
+export NSFW_ENDPOINT_URL=$(az ml online-endpoint show \
+  --name nsfw-detector-endpoint \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --workspace-name $AZURE_ML_WORKSPACE \
+  --query scoring_uri -o tsv)
+
+export ENDPOINT_KEY=$(az ml online-endpoint get-credentials \
+  --name nsfw-detector-endpoint \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --workspace-name $AZURE_ML_WORKSPACE \
+  --query primaryKey -o tsv)
+
+echo "NSFW Endpoint URL: $NSFW_ENDPOINT_URL"
+echo "Endpoint Key: ${ENDPOINT_KEY:0:20}..." # Show first 20 chars only
+
+# Test with a sample image (base64 encoded)
+# Note: You'll need to encode a test image first
+# For testing, you can use a simple test payload
+curl -X POST "$NSFW_ENDPOINT_URL" \
+  -H "Authorization: Bearer $ENDPOINT_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+  }'
+
+# Expected response: {"score": 0.0-1.0} or error message if image format invalid
+# A valid response indicates the endpoint is working
+
+# Test violence endpoint
+export VIOLENCE_ENDPOINT_URL=$(az ml online-endpoint show \
+  --name violence-detector-endpoint \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --workspace-name $AZURE_ML_WORKSPACE \
+  --query scoring_uri -o tsv)
+
+curl -X POST "$VIOLENCE_ENDPOINT_URL" \
+  -H "Authorization: Bearer $ENDPOINT_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+  }'
+
+echo "✅ Endpoint direct testing complete"
+```
+
+**Windows (PowerShell):**
+```powershell
+# Get endpoint URLs
+$env:NSFW_ENDPOINT_URL = az ml online-endpoint show `
+  --name nsfw-detector-endpoint `
+  --resource-group $env:AZURE_RESOURCE_GROUP `
+  --workspace-name $env:AZURE_ML_WORKSPACE `
+  --query scoring_uri -o tsv
+
+$env:ENDPOINT_KEY = az ml online-endpoint get-credentials `
+  --name nsfw-detector-endpoint `
+  --resource-group $env:AZURE_RESOURCE_GROUP `
+  --workspace-name $env:AZURE_ML_WORKSPACE `
+  --query primaryKey -o tsv
+
+# Test endpoint
+curl.exe -X POST "$env:NSFW_ENDPOINT_URL" `
+  -H "Authorization: Bearer $env:ENDPOINT_KEY" `
+  -H "Content-Type: application/json" `
+  -d '{\"image\": \"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==\"}'
+
+Write-Host "✅ Endpoint direct testing complete"
+```
+
+**Windows (Git Bash):**
+```bash
+# Same as Linux/macOS commands above
+export NSFW_ENDPOINT_URL=$(az ml online-endpoint show --name nsfw-detector-endpoint --resource-group $AZURE_RESOURCE_GROUP --workspace-name $AZURE_ML_WORKSPACE --query scoring_uri -o tsv)
+export ENDPOINT_KEY=$(az ml online-endpoint get-credentials --name nsfw-detector-endpoint --resource-group $AZURE_RESOURCE_GROUP --workspace-name $AZURE_ML_WORKSPACE --query primaryKey -o tsv)
+curl -X POST "$NSFW_ENDPOINT_URL" -H "Authorization: Bearer $ENDPOINT_KEY" -H "Content-Type: application/json" -d '{"image": "..."}'
+```
+
+---
+
+### Phase 3: End-to-End Integration Testing (Critical for Learners)
+
+#### Step 3.1: Test Video Upload Workflow
+
+**Linux/macOS (bash):**
+```bash
+# Get external IP (if not already set)
+export EXTERNAL_IP=$(kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+echo "Application URL: http://$EXTERNAL_IP"
+
+# Option 1: Upload via frontend (Recommended for learners)
+echo "1. Open browser: http://$EXTERNAL_IP"
+echo "2. Navigate to 'Upload' tab"
+echo "3. Drag & drop a test video (MP4, MOV, or AVI)"
+echo "4. Click 'Upload' and note the video_id from the response"
+echo ""
+
+# Option 2: Upload via API (for automated testing)
+echo "OR upload via API:"
+curl -X POST "http://$EXTERNAL_IP/api/ingestion/upload" \
+  -F "file=@test-video.mp4" \
+  -v
+
+# Save the video_id from response
+# Example response: {"video_id": "ab730f8c-bb35-462d-9eab-998663a32c13", ...}
+export VIDEO_ID="<uuid-from-response>"
+
+echo "✅ Video uploaded"
+echo "Video ID: $VIDEO_ID"
+```
+
+**Windows (PowerShell):**
+```powershell
+# Get external IP
+$env:EXTERNAL_IP = kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+
+Write-Host "Application URL: http://$env:EXTERNAL_IP"
+Write-Host "1. Open browser: http://$env:EXTERNAL_IP"
+Write-Host "2. Navigate to 'Upload' tab"
+Write-Host "3. Upload a test video"
+
+# Or via API
+curl.exe -X POST "http://$env:EXTERNAL_IP/api/ingestion/upload" -F "file=@test-video.mp4"
+```
+
+**Windows (Git Bash):**
+```bash
+# Same as Linux/macOS commands above
+export EXTERNAL_IP=$(kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+curl -X POST "http://$EXTERNAL_IP/api/ingestion/upload" -F "file=@test-video.mp4"
+```
+
+#### Step 3.2: Monitor Processing Pipeline
+
+**Linux/macOS (bash):**
+```bash
+# Watch logs to see if models are being called
+# This is CRITICAL to verify model integration
+kubectl logs -f -l app=deep-vision -n production | grep -i "endpoint\|model\|nsfw\|violence"
+
+# Expected logs (if endpoints are configured and working):
+# - "🔔 Calling NSFW endpoint: https://xxx.azureml.net/v1/score"
+# - "🔔 Calling Violence endpoint: https://xxx.azureml.net/v1/score"
+# - "✅ NSFW model response: {'score': 0.15}"
+# - "✅ Violence model response: {'score': 0.05}"
+# - "Combining CLIP (30%) + Custom Model (70%) scores"
+
+# Expected logs (if endpoints not accessible, graceful fallback):
+# - "⚠️ Model endpoint error: Connection timeout"
+# - "Falling back to CLIP-only detection"
+# - "Using CLIP scores only"
+
+# Expected logs (if endpoints not configured):
+# - "Using CLIP only (no custom model endpoints configured)"
+
+# Press Ctrl+C to stop watching logs
+```
+
+**Windows (PowerShell):**
+```powershell
+# Watch logs
+kubectl logs -f -l app=deep-vision -n production | Select-String -Pattern "endpoint|model|nsfw|violence"
+```
+
+**Windows (Git Bash):**
+```bash
+# Same as Linux/macOS commands above
+kubectl logs -f -l app=deep-vision -n production | grep -i "endpoint\|model\|nsfw\|violence"
+```
+
+#### Step 3.3: Verify Model Integration
+
+**Linux/macOS (bash):**
+```bash
+# Check if deep-vision is using custom models
+kubectl logs -l app=deep-vision -n production --tail=100 | grep -E "endpoint|custom|CLIP"
+
+# Check video processing status
+curl -s "http://$EXTERNAL_IP/api/videos/$VIDEO_ID" | jq .
+
+# Expected response includes:
+# {
+#   "video_id": "ab730f8c-bb35-462d-9eab-998663a32c13",
+#   "status": "analyzed" | "processing" | "approved" | "rejected" | "review",
+#   "nsfw_score": 0.15,
+#   "violence_score": 0.05,
+#   ...
+# }
+
+# Verify scores are calculated
+curl -s "http://$EXTERNAL_IP/api/videos/$VIDEO_ID" | jq '.nsfw_score, .violence_score'
+
+# Expected: Both scores should be present (0.0 to 1.0)
+
+# Check if scores are from custom models (compare with CLIP-only baseline)
+# Custom models typically provide more accurate scores
+echo "✅ Model integration verified"
+```
+
+**Windows (PowerShell):**
+```powershell
+# Check logs
+kubectl logs -l app=deep-vision -n production --tail=100 | Select-String -Pattern "endpoint|custom|CLIP"
+
+# Check video status
+$response = curl.exe -s "http://$env:EXTERNAL_IP/api/videos/$env:VIDEO_ID"
+$response | ConvertFrom-Json | Format-List
+
+Write-Host "✅ Model integration verified"
+```
+
+**Windows (Git Bash):**
+```bash
+# Same as Linux/macOS commands above
+kubectl logs -l app=deep-vision -n production --tail=100 | grep -E "endpoint|custom|CLIP"
+curl -s "http://$EXTERNAL_IP/api/videos/$VIDEO_ID" | jq .
+```
+
+#### Step 3.4: Verify Complete Workflow
+
+**Linux/macOS (bash):**
+```bash
+# 1. Check video status progression
+#    Expected flow: uploaded → screened → analyzed → approved/rejected/review
+
+echo "Checking video status progression..."
+curl -s "http://$EXTERNAL_IP/api/videos/$VIDEO_ID" | jq '.status, .decision'
+
+# Expected status progression:
+# - "uploaded" → "screened" → "analyzed" → "approved"/"rejected"/"review"
+
+# 2. Check DynamoDB for complete record
+aws dynamodb get-item \
+  --table-name guardian-videos \
+  --key "{\"video_id\":{\"S\":\"$VIDEO_ID\"}}" \
+  --region $AWS_REGION | jq .
+
+# Expected DynamoDB record includes:
+# - video_id: UUID
+# - uploaded_at: ISO timestamp
+# - screened_at: ISO timestamp (if fast-screening completed)
+# - analyzed_at: ISO timestamp (if deep-vision completed)
+# - decided_at: ISO timestamp (if policy-engine made decision)
+# - status: "approved" | "rejected" | "review"
+# - decision: "approved" | "rejected" | "review"
+# - nsfw_score: number (0.0-1.0)
+# - violence_score: number (0.0-1.0)
+
+# 3. Verify all stages completed
+echo "Verifying all processing stages..."
+
+# Check timestamps
+UPLOADED=$(aws dynamodb get-item \
+  --table-name guardian-videos \
+  --key "{\"video_id\":{\"S\":\"$VIDEO_ID\"}}" \
+  --region $AWS_REGION \
+  --query 'Item.uploaded_at.S' --output text)
+
+SCREENED=$(aws dynamodb get-item \
+  --table-name guardian-videos \
+  --key "{\"video_id\":{\"S\":\"$VIDEO_ID\"}}" \
+  --region $AWS_REGION \
+  --query 'Item.screened_at.S' --output text)
+
+ANALYZED=$(aws dynamodb get-item \
+  --table-name guardian-videos \
+  --key "{\"video_id\":{\"S\":\"$VIDEO_ID\"}}" \
+  --region $AWS_REGION \
+  --query 'Item.analyzed_at.S' --output text)
+
+DECIDED=$(aws dynamodb get-item \
+  --table-name guardian-videos \
+  --key "{\"video_id\":{\"S\":\"$VIDEO_ID\"}}" \
+  --region $AWS_REGION \
+  --query 'Item.decided_at.S' --output text)
+
+echo "Uploaded: ${UPLOADED:-'Not set'}"
+echo "Screened: ${SCREENED:-'Not set'}"
+echo "Analyzed: ${ANALYZED:-'Not set'}"
+echo "Decided: ${DECIDED:-'Not set'}"
+
+# All timestamps should be present for a complete workflow
+if [ -n "$UPLOADED" ] && [ -n "$SCREENED" ] && [ -n "$ANALYZED" ] && [ -n "$DECIDED" ]; then
+  echo "✅ All processing stages completed"
+else
+  echo "⚠️ Some stages may still be processing. Wait a few minutes and check again."
+fi
+```
+
+**Windows (PowerShell):**
+```powershell
+# Check video status
+$video = curl.exe -s "http://$env:EXTERNAL_IP/api/videos/$env:VIDEO_ID" | ConvertFrom-Json
+Write-Host "Status: $($video.status)"
+Write-Host "Decision: $($video.decision)"
+
+# Check DynamoDB
+$item = aws dynamodb get-item `
+  --table-name guardian-videos `
+  --key "{\"video_id\":{\"S\":\"$env:VIDEO_ID\"}}" `
+  --region $env:AWS_REGION | ConvertFrom-Json
+
+Write-Host "Uploaded: $($item.Item.uploaded_at.S)"
+Write-Host "Screened: $($item.Item.screened_at.S)"
+Write-Host "Analyzed: $($item.Item.analyzed_at.S)"
+Write-Host "Decided: $($item.Item.decided_at.S)"
+
+Write-Host "✅ Complete workflow verified"
+```
+
+**Windows (Git Bash):**
+```bash
+# Same as Linux/macOS commands above
+curl -s "http://$EXTERNAL_IP/api/videos/$VIDEO_ID" | jq '.status, .decision'
+aws dynamodb get-item --table-name guardian-videos --key "{\"video_id\":{\"S\":\"$VIDEO_ID\"}}" --region $AWS_REGION | jq .
+```
+
+---
+
+### Phase 4: Validation Checklist (For Learners)
+
+After deployment pipeline completes, verify each item:
+
+#### Azure ML Endpoints
+- [ ] Both endpoints created (`nsfw-detector-endpoint`, `violence-detector-endpoint`)
+- [ ] Endpoints show "Succeeded" provisioning state
+- [ ] Endpoints are "Healthy" (traffic received, no errors)
+- [ ] Endpoint URLs are accessible (tested with curl)
+
+#### Kubernetes Integration
+- [ ] ConfigMap updated with endpoint URLs (`NSFW_MODEL_ENDPOINT`, `VIOLENCE_MODEL_ENDPOINT`, `MODEL_ENDPOINT_KEY`)
+- [ ] `deep-vision` pods restarted successfully
+- [ ] Pods are "Running" and healthy (no CrashLoopBackOff)
+- [ ] Pod logs show endpoint URLs are loaded
+
+#### Model Integration
+- [ ] `deep-vision` service can reach endpoints (check logs for "Calling NSFW endpoint" or "Calling Violence endpoint")
+- [ ] Models are being called OR graceful fallback to CLIP (check logs)
+- [ ] No connection errors in logs (no "Connection refused" or "Timeout")
+- [ ] Scores are calculated (both `nsfw_score` and `violence_score` present)
+
+#### End-to-End Testing
+- [ ] Upload test video → Video appears in dashboard
+- [ ] Processing completes → Status changes to final decision (`approved`/`rejected`/`review`)
+- [ ] Scores are calculated → NSFW and Violence scores present (0.0-1.0)
+- [ ] Video is playable → Streaming URL works
+- [ ] Decision is made → Status is `approved`/`rejected`/`review` (not `pending` or `processing`)
+
+---
+
+### Phase 5: Production Verification
+
+#### Step 5.1: Compare Model Performance
+
+**Linux/macOS (bash):**
+```bash
+# Test with same video before/after model deployment
+# Compare scores:
+# - Before: CLIP-only scores (if endpoints not configured)
+# - After: Custom model scores (should be more accurate)
+
+echo "Comparing model performance..."
+
+# Check logs for model usage
+kubectl logs -l app=deep-vision -n production --tail=200 | grep -i "custom\|endpoint\|CLIP"
+
+# Expected indicators of custom model usage:
+# - "Combining CLIP (30%) + Custom Model (70%) scores"
+# - "Custom model score: X"
+# - "Final combined score: Y"
+
+# If you see only "Using CLIP only", endpoints may not be configured correctly
+echo "✅ Model performance comparison complete"
+```
+
+**Windows (PowerShell):**
+```powershell
+# Check logs
+kubectl logs -l app=deep-vision -n production --tail=200 | Select-String -Pattern "custom|endpoint|CLIP"
+
+Write-Host "✅ Model performance comparison complete"
+```
+
+**Windows (Git Bash):**
+```bash
+# Same as Linux/macOS commands above
+kubectl logs -l app=deep-vision -n production --tail=200 | grep -i "custom\|endpoint\|CLIP"
+```
+
+#### Step 5.2: Monitor Endpoint Metrics
+
+**Linux/macOS (bash):**
+```bash
+# Check endpoint utilization in Azure Portal
+echo "1. Open Azure Portal: https://portal.azure.com"
+echo "2. Navigate to: Azure Machine Learning > Workspaces > $AZURE_ML_WORKSPACE > Endpoints"
+echo "3. Select an endpoint (nsfw-detector-endpoint or violence-detector-endpoint)"
+echo "4. Click 'Metrics' tab"
+echo ""
+echo "Monitor the following metrics:"
+echo "- Request count (should increase as videos are processed)"
+echo "- Response time (should be < 2 seconds per request)"
+echo "- Error rate (should be < 1%)"
+echo "- Cost per hour (Standard_DS3_v2 instances cost ~$0.20/hour each)"
+echo ""
+echo "OR use Azure CLI:"
+
+# Get endpoint metrics (last 1 hour)
+az monitor metrics list \
+  --resource "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/$AZURE_RESOURCE_GROUP/providers/Microsoft.MachineLearningServices/workspaces/$AZURE_ML_WORKSPACE/onlineEndpoints/nsfw-detector-endpoint" \
+  --metric "RequestLatency" \
+  --start-time "$(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%SZ)" \
+  --end-time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --output table
+
+echo "✅ Endpoint metrics monitoring complete"
+```
+
+**Windows (PowerShell):**
+```powershell
+Write-Host "1. Open Azure Portal: https://portal.azure.com"
+Write-Host "2. Navigate to Azure Machine Learning > Workspaces > $env:AZURE_ML_WORKSPACE > Endpoints"
+Write-Host "3. Select an endpoint and view Metrics"
+
+Write-Host "✅ Endpoint metrics monitoring complete"
+```
+
+**Windows (Git Bash):**
+```bash
+# Same as Linux/macOS commands above
+echo "Open Azure Portal to view endpoint metrics"
+```
+
+---
+
+### Complete Workflow Summary
+
+```
+1. Training Pipeline (azure-pipelines-ml-training.yml)
+   ↓
+   Trains models → Registers in MLflow → Models available in registry
+   
+2. Deployment Pipeline (azure-pipelines-ml-deployment.yml)
+   ↓
+   Deploys to endpoints → Updates ConfigMap → Restarts pods
+   
+3. Verification & Testing (Manual Steps - This Phase)
+   ↓
+   Verify endpoints → Test endpoints → Verify ConfigMap → Check pod logs
+   
+4. End-to-End Testing (Critical)
+   ↓
+   Upload video → Monitor processing → Verify scores → Check decision
+   
+5. Production Use
+   ↓
+   Videos use custom models → Improved accuracy → Automated decisions
+```
+
+---
+
+### Troubleshooting Common Issues
+
+#### Issue: Endpoints Not Accessible from deep-vision Pods
+
+**Symptoms:**
+- Logs show "Connection refused" or "Timeout" errors
+- Scores fall back to CLIP-only
+
+**Diagnosis:**
+```bash
+# Check if endpoints are in ConfigMap
+kubectl get configmap guardian-config -n production -o yaml | grep MODEL_ENDPOINT
+
+# Check if deep-vision pods have the environment variables
+kubectl exec -n production deployment/deep-vision -- env | grep MODEL_ENDPOINT
+
+# Test endpoint connectivity from pod
+kubectl exec -n production deployment/deep-vision -- python3 -c "
+import os
+import urllib.request
+import json
+
+endpoint = os.getenv('NSFW_MODEL_ENDPOINT')
+key = os.getenv('MODEL_ENDPOINT_KEY')
+
+if not endpoint:
+    print('❌ NSFW_MODEL_ENDPOINT not set')
+    exit(1)
+
+print(f'Testing endpoint: {endpoint}')
+try:
+    req = urllib.request.Request(endpoint)
+    req.add_header('Authorization', f'Bearer {key}')
+    req.add_header('Content-Type', 'application/json')
+    with urllib.request.urlopen(req, timeout=5) as response:
+        print(f'✅ Endpoint accessible: {response.status}')
+except Exception as e:
+    print(f'❌ Endpoint error: {e}')
+"
+```
+
+**Fix:**
+```bash
+# Re-run the deployment pipeline or manually update ConfigMap
+# See Step 2.2 for ConfigMap update commands
+```
+
+#### Issue: Models Not Being Called (CLIP Fallback)
+
+**Symptoms:**
+- Logs show "Using CLIP only"
+- No "Calling NSFW endpoint" messages
+
+**Diagnosis:**
+```bash
+# Check if endpoints are configured
+kubectl get configmap guardian-config -n production -o yaml | grep MODEL_ENDPOINT
+
+# Check deep-vision code logic (endpoints may be empty strings)
+kubectl logs -l app=deep-vision -n production --tail=100 | grep -i "endpoint\|model"
+```
+
+**Fix:**
+- Ensure deployment pipeline completed successfully
+- Verify ConfigMap has non-empty endpoint URLs
+- Restart deep-vision pods: `kubectl rollout restart deployment/deep-vision -n production`
+
+#### Issue: Endpoint Authentication Errors
+
+**Symptoms:**
+- Logs show "401 Unauthorized" or "Bearer token not provided"
+
+**Diagnosis:**
+```bash
+# Check if MODEL_ENDPOINT_KEY is set
+kubectl exec -n production deployment/deep-vision -- env | grep MODEL_ENDPOINT_KEY
+
+# Verify key is correct
+az ml online-endpoint get-credentials \
+  --name nsfw-detector-endpoint \
+  --resource-group $AZURE_RESOURCE_GROUP \
+  --workspace-name $AZURE_ML_WORKSPACE \
+  --query primaryKey -o tsv
+```
+
+**Fix:**
+- Update ConfigMap with correct endpoint key
+- Restart deep-vision pods
+
+#### Issue: Video Stuck in "Processing" Status
+
+**Symptoms:**
+- Video uploaded but status never changes from "processing"
+- Scores are calculated but decision is not made
+
+**Diagnosis:**
+```bash
+# Check policy-engine logs
+kubectl logs -l app=policy-engine -n production --tail=100 | grep -i "decide\|stuck"
+
+# Check deep-vision logs for errors
+kubectl logs -l app=deep-vision -n production --tail=100 | grep -i "error\|failed"
+
+# Check if policy-engine is reachable from deep-vision
+kubectl exec -n production deployment/deep-vision -- python3 -c "
+import os
+import urllib.request
+url = os.getenv('POLICY_ENGINE_SERVICE_URL', 'http://policy-engine-service:80') + '/health'
+try:
+    with urllib.request.urlopen(url, timeout=5) as response:
+        print(f'✅ Policy engine reachable: {response.status}')
+except Exception as e:
+    print(f'❌ Policy engine error: {e}')
+"
+```
+
+**Fix:**
+- Ensure `POLICY_ENGINE_SERVICE_URL` is correctly set in ConfigMap
+- Verify policy-engine service is running: `kubectl get pods -n production -l app=policy-engine`
+- Restart policy-engine if needed: `kubectl rollout restart deployment/policy-engine -n production`
+
+---
+
+### Next Steps After Successful Testing
+
+1. ✅ **Document Results**: Record endpoint URLs, test results, and any issues encountered
+2. ✅ **Monitor Production**: Set up alerts for endpoint errors or high latency
+3. ✅ **Optimize Costs**: Review endpoint instance counts and scale down if needed
+4. ✅ **Model Updates**: Plan for retraining and redeployment cycles
+5. ✅ **Performance Tuning**: Compare custom model accuracy vs CLIP baseline
+
+---
+
+**Total Testing Time**: 45 minutes (first-time verification)
+**Status**: ✅ Complete Post-Deployment Testing Guide
+**Critical for Learners**: Yes - Ensures understanding of end-to-end ML integration
+
+🎯 **Testing complete! Your ML models are now integrated into production.**
+
+---
+
 ## Phase 9: Setup Monitoring (Optional, 30 minutes)
 
 ### Step 9.1: Install Prometheus
